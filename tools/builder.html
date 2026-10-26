@@ -63,6 +63,7 @@
   input::placeholder { color: #8f826d; }
   .checks { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
   .checks label { display: flex; gap: .35rem; align-items: center; cursor: pointer; }
+  .checks label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
 
   .row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; }
   .row > .field { flex: 1 1 11rem; }
@@ -247,16 +248,23 @@ const hashPicker = (obj) => {
             el("button", { type: "button", className: "small", textContent: "Hash a file…" }), input);
 };
 
+// Each target can have only one build, so a target another build has is locked here.
 function renderArtifacts() {
   const box = $("artifacts");
+  const owner = {};
+  state.artifacts.forEach((a, i) => a.targets.forEach(t => { if (!(t in owner)) owner[t] = i; }));
+  $("add-artifact").hidden = TARGETS.every(([t]) => t in owner);
   box.replaceChildren(...state.artifacts.map((a, i) => {
     const checks = el("div", { className: "checks" }, ...TARGETS.map(([t, label]) => {
-      const cb = el("input", { type: "checkbox", checked: a.targets.includes(t) });
+      const taken = !a.targets.includes(t) && t in owner;
+      const cb = el("input", { type: "checkbox", checked: a.targets.includes(t), disabled: taken });
       cb.addEventListener("change", () => {
         a.targets = TARGETS.map(([x]) => x).filter(x => x === t ? cb.checked : a.targets.includes(x));
-        update();
+        render();
       });
-      return el("label", {}, cb, label);
+      const lbl = el("label", {}, cb, label);
+      if (taken) lbl.title = `Build ${owner[t] + 1} already covers this target.`;
+      return lbl;
     }));
     const libs = el("div", {}, ...a.library_dependencies.map((lib, j) => el("div", { className: "item", style: "background:var(--card)" },
       el("div", { className: "item-head" }, el("strong", { textContent: `Library ${j + 1}` }),
