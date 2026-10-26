@@ -111,12 +111,14 @@
         <p class="hint">The id is your GitHub <code>owner.repo</code>; every build must be a release asset of that repo.
           Updating? Fill in the owner and repo and load what's published, then change the version, links and hashes.</p>
         <div class="grid">
-          <label class="field">GitHub owner<input id="owner" type="text" placeholder="YourGitHubUser" autocomplete="off"></label>
-          <label class="field">GitHub repo<input id="repo" type="text" placeholder="YourRepo" autocomplete="off"></label>
+          <label class="field">GitHub owner<input id="owner" type="text" placeholder="YourGitHubUser" autocomplete="off" list="dl-owners"></label>
+          <label class="field">GitHub repo<input id="repo" type="text" placeholder="YourRepo" autocomplete="off" list="dl-repos"></label>
           <label class="field">Version<input id="version" type="text" placeholder="1.0.0" autocomplete="off"></label>
           <label class="field">Name<input id="name" type="text" placeholder="Your Mod Name"></label>
           <label class="field">Author<input id="author" type="text" placeholder="defaults to the owner"></label>
         </div>
+        <div id="published-hint" class="status"></div>
+        <datalist id="dl-owners"></datalist><datalist id="dl-repos"></datalist><datalist id="dl-mods"></datalist>
         <label class="field" style="margin-top:.55rem">Description<input id="description" type="text" placeholder="One short line describing what the mod does."></label>
         <div class="actions">
           <button id="load-published" type="button">Load published manifest</button>
@@ -211,7 +213,13 @@ let state = {
   owner: "", repo: "", version: "", name: "", author: "", description: "",
   parity: true, scenes: [], dependencies: [], screenshots: [], artifacts: [blankArtifact()],
 };
-let published = null;   // versions already in the index for the current id, once fetched
+let indexMods = null;    // repository.json's "mods", once fetched
+
+const vkey = (v) => v.split(".").map(Number);
+const vcmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+// Published versions of id, highest first; [] if it isn't in the index.
+const publishedOf = (id) => Object.values((indexMods || {})[id] || {})
+  .flatMap(e => e.versions || []).filter(v => VERSION_RE.test(v)).sort((a, b) => vcmp(vkey(b), vkey(a)));
 
 // -- form ------------------------------------------------------------------------
 const el = (tag, props = {}, ...kids) => {
@@ -222,6 +230,7 @@ const el = (tag, props = {}, ...kids) => {
 const field = (label, value, onInput, opts = {}) => {
   const input = el("input", { type: "text", value: value || "", placeholder: opts.placeholder || "",
                                className: opts.mono ? "mono" : "", autocomplete: "off" });
+  if (opts.list) input.setAttribute("list", opts.list);
   input.addEventListener("input", () => { onInput(input.value); update(); });
   return el("label", { className: "field" + (opts.wide ? " wide" : "") }, label, input);
 };
@@ -282,10 +291,21 @@ function renderArtifacts() {
 }
 
 function renderLists() {
-  $("dependencies").replaceChildren(...state.dependencies.map((d, i) => el("div", { className: "row", style: "margin-bottom:.5rem" },
-    field("Mod id", d.id, v => d.id = v.trim(), { placeholder: "SomeDev.UtilKit" }),
-    field("Minimum version", d.version, v => d.version = v.trim(), { placeholder: "1.0.0" }),
-    removeButton(() => state.dependencies.splice(i, 1)))));
+  $("dependencies").replaceChildren(...state.dependencies.map((d, i) => {
+    const versions = el("datalist", { id: `dl-dep-${i}` });
+    const fillVersions = () => versions.replaceChildren(...publishedOf(d.id).map(v => el("option", { value: v })));
+    const ver = field("Minimum version", d.version, v => d.version = v.trim(), { placeholder: "1.0.0", list: versions.id });
+    // Picking a published mod fills in its latest version, if none is set yet.
+    const id = field("Mod id", d.id, v => {
+      d.id = v.trim();
+      fillVersions();
+      const latest = publishedOf(d.id)[0];
+      if (latest && !d.version) ver.querySelector("input").value = d.version = latest;
+    }, { placeholder: "SomeDev.UtilKit", list: "dl-mods" });
+    fillVersions();
+    return el("div", { className: "row", style: "margin-bottom:.5rem" }, id, ver, versions,
+      removeButton(() => state.dependencies.splice(i, 1)));
+  }));
   $("screenshots").replaceChildren(...state.screenshots.map((s, i) => el("div", { className: "row", style: "margin-bottom:.5rem" },
     field("Image link", s, v => state.screenshots[i] = v.trim(), { wide: true }),
     removeButton(() => state.screenshots.splice(i, 1)))));
@@ -311,7 +331,7 @@ function render() {
 for (const k of ["owner", "repo", "version", "name", "author", "description"]) {
   $(k).addEventListener("input", () => {
     state[k] = k === "description" || k === "name" ? $(k).value : $(k).value.trim();
-    if (k === "owner" || k === "repo") published = null;
+    if (k === "owner") fillRepoList();
     update();
   });
 }
@@ -359,6 +379,18 @@ const versionProblem = (v, what) => !VERSION_RE.test(v) ? `${what} must be MAJOR
   : v.split(".").some(x => Number(x) > 2147483647) ? `${what} has a number over 2147483647.` : null;
 const bareName = (n) => n && n !== "." && n !== ".." && !/[\/\\:]/.test(n);
 
+// Mirrors version_floor_error in tools/modindex.py: each major is its own line.
+function versionFloorProblem(pub, v) {
+  const k = vkey(v), show = (x) => x.join(".");
+  if (pub.includes(v)) return `${v} is already published. Bump the version.`;
+  const inMajor = pub.map(vkey).filter(p => p[0] === k[0]);
+  if (inMajor.length && vcmp(k, inMajor[0]) < 0)
+    return `${v} is lower than ${show(inMajor[0])}, the highest published ${k[0]}.x. Use a higher version.`;
+  if (!inMajor.length && pub.length && k[0] < vkey(pub[0])[0])
+    return `${v} would start major ${k[0]}, below the newest published version ${pub[0]}. Use a higher version.`;
+  return null;
+}
+
 // The same rules as tools/modindex.py validate; the hashes are only checked for shape here.
 function problems(m) {
   const out = [], hashless = [];
@@ -366,7 +398,10 @@ function problems(m) {
   if (!REPO_RE.test(state.repo) || state.repo === "." || state.repo === "..") out.push("The repo must be a GitHub repository name.");
   const vp = versionProblem(state.version, "The version");
   if (vp) out.push(vp);
-  else if (published && published.includes(state.version)) out.push(`${state.version} is already published. Bump the version.`);
+  else if (USER_RE.test(state.owner) && REPO_RE.test(state.repo)) {
+    const fp = versionFloorProblem(publishedOf(modId()), state.version);
+    if (fp) out.push(fp);
+  }
   for (const d of state.dependencies) {
     if (!d.id) continue;
     const [u, r] = d.id.split(/\.(.*)/s);
@@ -420,6 +455,10 @@ function update() {
     verdict.replaceChildren(el("p", { className: "ok", textContent: "Ready to submit. The automated checks still download every file and compare the hashes." }));
   }
   $("open-pr").disabled = errors.length > 0 || hashless.length > 0;
+  const pub = USER_RE.test(state.owner) && REPO_RE.test(state.repo) ? publishedOf(modId()) : [];
+  $("published-hint").textContent = pub.length
+    ? `${modId()} is published: ${pub.slice(0, 5).join(", ")}${pub.length > 5 ? ", …" : ""}. Load the latest to start from it.`
+    : "";
   try { localStorage.setItem("builder-draft", JSON.stringify(state)); } catch {}
 }
 
@@ -442,18 +481,24 @@ function loadManifest(m) {
     })),
   };
   if (!state.artifacts.length) state.artifacts = [blankArtifact()];
-  published = null;
   render();
-  fetchPublished();
 }
 
-async function fetchPublished() {
-  if (!USER_RE.test(state.owner) || !REPO_RE.test(state.repo)) return;
+// Owner and repo suggestions come from the mods already in the index.
+function fillRepoList() {
+  const ids = Object.keys(indexMods || {}).map(id => id.split(/\.(.*)/s));
+  const opts = (vals) => [...new Set(vals)].sort().map(v => el("option", { value: v }));
+  $("dl-owners").replaceChildren(...opts(ids.map(([o]) => o)));
+  $("dl-repos").replaceChildren(...opts(ids.filter(([o]) => !state.owner || o.toLowerCase() === state.owner.toLowerCase()).map(([, r]) => r)));
+  $("dl-mods").replaceChildren(...opts(Object.keys(indexMods || {})));
+}
+
+async function fetchIndex() {
   try {
     const r = await fetch(`${RAW}/repository.json`, { cache: "no-store" });
-    const majors = (await r.json()).mods?.[modId()] || {};
-    published = Object.values(majors).flatMap(e => e.versions || []);
-    update();
+    indexMods = (await r.json()).mods || {};
+    fillRepoList();
+    render();
   } catch {}
 }
 
@@ -499,7 +544,7 @@ try {
   if (draft && Array.isArray(draft.artifacts)) state = { ...state, ...draft };
 } catch {}
 render();
-fetchPublished();
+fetchIndex();
 </script>
 </body>
 </html>
