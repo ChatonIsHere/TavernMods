@@ -1,0 +1,2 @@
+# LF everywhere, so files check out identically on the Linux runners.
+* text=auto eol=lf

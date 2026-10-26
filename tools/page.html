@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Community Mods — The Modding Tavern</title>
+<meta name="description" content="Browse the mods in this Modding Tavern index.">
+<!-- `modindex.py site` bakes the mod list into MODS below. -->
+<style>
+  :root {
+    --background: #1a1210;
+    --foreground: #f0e6cc;
+    --card: #241c17;
+    --muted: #2e2218;
+    --muted-foreground: #d0c4aa;
+    --border: #4a3828;
+    --primary: #e8a840;
+    --primary-dim: #8a5e1a;
+    --accent: #6ab0aa;
+    --success: #6aaa72;
+    --violet: #b9a0dc;
+    --danger: #e08585;
+    --ring: rgba(232, 168, 64, .35);
+    --radius: .5rem;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font: 13.5px/1.5 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { padding: 1.25rem 1.5rem 3rem; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: .9rem; margin-bottom: .9rem;
+  }
+  .titles { flex: 1 1 20rem; min-width: 0; }
+  h1 { font: 700 1.35rem/1.2 var(--serif); color: var(--primary); margin: 0 0 .15rem; }
+  .lede { margin: 0; font-size: .82rem; }
+  .lede code { font: .78rem var(--mono); color: var(--accent); }
+  .controls { display: flex; gap: .5rem; align-items: center; }
+
+  .input {
+    width: 17rem; padding: .35rem .6rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    color: var(--foreground); font: inherit;
+  }
+  .input::placeholder { color: var(--muted-foreground); }
+  .input:focus { outline: none; border-color: var(--primary-dim); box-shadow: 0 0 0 3px var(--ring); }
+
+  .segmented { display: flex; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); overflow: hidden; }
+  .segmented button {
+    padding: .35rem .75rem; border: 0; cursor: pointer;
+    background: var(--card); color: var(--muted-foreground); font: inherit;
+  }
+  .segmented button + button { border-left: 1px solid var(--border); }
+  .segmented button:hover { color: var(--foreground); }
+  .segmented button[aria-pressed="true"] { background: var(--muted); color: var(--primary); }
+
+  .count { color: var(--muted-foreground); font-size: .78rem; margin-bottom: .6rem; }
+
+  .grid { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); }
+  .card {
+    display: flex; flex-direction: column;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .shot {
+    aspect-ratio: 16 / 9;
+    display: grid; place-items: center;
+    padding: .6rem; text-align: center;
+    background: var(--muted); border-bottom: 1px solid var(--border);
+    font: 700 .85rem/1.25 var(--serif); color: var(--primary);
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .card-body { padding: .55rem .65rem .65rem; display: flex; flex-direction: column; gap: .25rem; flex: 1; }
+  .card-title { font: 700 .92rem/1.25 var(--serif); }
+  .card-meta { font-size: .74rem; color: var(--muted-foreground); }
+  .card-desc {
+    font-size: .78rem; flex: 1; margin: .1rem 0 .25rem;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .82rem; }
+  thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--background); text-align: left; font-weight: 600;
+    font-size: .7rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted-foreground);
+    padding: .4rem .6rem; border-bottom: 1px solid var(--border);
+  }
+  th:nth-child(1) { width: 15%; }
+  th:nth-child(2) { width: 15%; }
+  th:nth-child(3) { width: 9%; }
+  th:nth-child(4) { width: 5.5rem; }
+  th:nth-child(5) { width: 13.5rem; }
+  tbody td {
+    padding: .32rem .6rem; border-bottom: 1px solid var(--border); vertical-align: middle;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  tbody tr:hover { background: var(--card); }
+  td.name { font-weight: 600; }
+  td.ver { color: var(--primary); font-family: var(--mono); }
+  td.id { font: .74rem var(--mono); color: var(--muted-foreground); }
+
+  .badges { display: flex; flex-wrap: wrap; gap: .25rem; }
+  .badge {
+    padding: .05rem .4rem; border: 1px solid var(--border); border-radius: 999px;
+    font-size: .66rem; letter-spacing: .02em; color: var(--muted-foreground); white-space: nowrap;
+  }
+  .badge.version { color: var(--primary); border-color: var(--primary-dim); }
+  .badge.pc { color: var(--accent); border-color: var(--accent); }
+  .badge.server { color: var(--success); border-color: var(--success); }
+  .badge.quest { color: var(--violet); border-color: var(--violet); }
+  .badge.parity { color: var(--danger); border-color: var(--danger); }
+  .badge[title] { cursor: help; }
+  td .badges { flex-wrap: nowrap; }
+
+  .note { color: var(--muted-foreground); padding: 1.5rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="titles">
+      <h1>Community Mods</h1>
+      <p class="lede">
+        Install from <strong>Mod Manager → Community Mods</strong> in TavernLauncher.
+        A headless server takes the same ids in its <code>modlist</code>.
+      </p>
+    </div>
+    <div class="controls">
+      <input id="q" class="input" type="search" placeholder="Search mods, authors, ids…" autocomplete="off">
+      <div class="segmented" role="group" aria-label="View">
+        <button id="v-cards" type="button">Cards</button>
+        <button id="v-table" type="button">Table</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="count" class="count"></div>
+  <div id="view"></div>
+  <p id="note" class="note"></p>
+</div>
+
+<script>
+const MODS = /*__MODS__*/[];
+
+const el = (id) => document.getElementById(id);
+const text = (s) => String(s ?? "");
+
+const hasTarget = (m, t) => (m.targets || []).includes(t);
+
+// Parity is only enforced on a mod a server runs that also has a client build.
+const parityApplies = (m) =>
+  m.parity_required && hasTarget(m, "server") && (hasTarget(m, "pc") || hasTarget(m, "quest"));
+
+const TAGS = [
+  [(m) => hasTarget(m, "pc"), "pc", "PC",
+   "Has a build for the game on PC: SteamVR, a Quest over Link, or flycam."],
+  [(m) => hasTarget(m, "server"), "server", "Server", "Has a build for game servers."],
+  [(m) => hasTarget(m, "quest"), "quest", "Quest",
+   "Has a build for the standalone Quest headset. Nothing installs these yet."],
+  [parityApplies, "parity", "Parity",
+   "You need the server's exact version of this mod to join."],
+];
+
+const tags = (parent, m) => {
+  for (const [shown, cls, label, explain] of TAGS)
+    if (shown(m)) put(parent, "span", `badge ${cls}`, label).title = explain;
+  return parent;
+};
+
+// textContent only: these strings come from mod authors.
+const put = (parent, tag, cls, value) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (value !== undefined) node.textContent = text(value);
+  parent.append(node);
+  return node;
+};
+
+const card = (m) => {
+  const node = document.createElement("article");
+  node.className = "card";
+  const shot = put(node, "div", "shot");
+  const src = (m.screenshots || [])[0];
+  if (src) {
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.src = src;
+    shot.append(img);
+  } else {
+    shot.textContent = text(m.name);
+  }
+  const body = put(node, "div", "card-body");
+  put(body, "div", "card-title", m.name);
+  put(body, "div", "card-meta", `by ${text(m.author)}`);
+  put(body, "p", "card-desc", m.description);
+  const badges = put(body, "div", "badges");
+  put(badges, "span", "badge version", m.latest);
+  tags(badges, m);
+  return node;
+};
+
+const COLUMNS = ["Mod", "Id", "Author", "Latest", "Tags", "Description"];
+
+const table = (list) => {
+  const node = document.createElement("table");
+  const head = put(node, "thead").insertRow();
+  for (const label of COLUMNS) put(head, "th", null, label);
+  const body = put(node, "tbody");
+  for (const m of list) {
+    const row = body.insertRow();
+    put(row, "td", "name", m.name).title = text(m.name);
+    put(row, "td", "id", m.id).title = m.id;
+    put(row, "td", null, m.author);
+    put(row, "td", "ver", m.latest);
+    tags(put(put(row, "td"), "div", "badges"), m);
+    put(row, "td", null, m.description).title = text(m.description);
+  }
+  return node;
+};
+
+let view = "cards";
+try { view = localStorage.getItem("view") || "cards"; } catch {}
+
+const render = () => {
+  const q = el("q").value.trim().toLowerCase();
+  const shown = q
+    ? MODS.filter(m => `${m.id} ${m.name} ${m.author}`.toLowerCase().includes(q))
+    : MODS;
+  el("v-cards").setAttribute("aria-pressed", view === "cards");
+  el("v-table").setAttribute("aria-pressed", view === "table");
+  if (view === "table") {
+    el("view").replaceChildren(table(shown));
+  } else {
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.append(...shown.map(card));
+    el("view").replaceChildren(grid);
+  }
+  el("count").textContent = `${shown.length} of ${MODS.length} mod${MODS.length === 1 ? "" : "s"}`;
+  el("note").textContent =
+    MODS.length === 0 ? "This index has no mods in it yet."
+    : shown.length === 0 ? "Nothing here matches that." : "";
+};
+
+const setView = (next) => {
+  view = next;
+  try { localStorage.setItem("view", next); } catch {}
+  render();
+};
+el("v-cards").addEventListener("click", () => setView("cards"));
+el("v-table").addEventListener("click", () => setView("table"));
+el("q").addEventListener("input", render);
+render();
+</script>
+</body>
+</html>

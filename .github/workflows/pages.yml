@@ -1,0 +1,50 @@
+name: Publish page
+
+# Bakes the browsable page and deploys it to GitHub Pages (Settings -> Pages
+# -> Source must be "GitHub Actions"). Nothing is committed.
+#
+# Chained after "Publish index" rather than sharing its trigger, so the page
+# never describes a mod the index build failed to write.
+
+on:
+  workflow_run:
+    workflows: ["Publish index"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# GitHub's guidance for Pages: a cancelled deployment fails the one replacing it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Not the triggering commit: that is the one BEFORE the index build's own commit.
+          ref: main
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - run: python tools/modindex.py site
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v5
