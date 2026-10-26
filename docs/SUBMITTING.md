@@ -27,14 +27,14 @@ Set `parity_required` to `false` only if clients and servers can run different v
 
 Publish a new release with a higher version, then submit it as above: a new file at `submissions/<owner>.<repo>/<new version>.json`. In the builder, enter your owner and repo and press **Load published manifest**, then change the version, links and hashes. The launcher offers the update to anyone who has the mod.
 
-A published version never changes. To fix a build, bump the version; a resubmission of an existing version is rejected.
+A published version never changes. To fix a build, bump the version; a resubmission of an existing version is rejected. A new version must be higher than the last one in its major, so you can still ship 1.4.1 after 2.0.0 for anyone held on 1.x.
 
 ## Checks
 
 On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fails if:
 
 - it comes from a fork and does anything other than add one file at `submissions/<owner>.<repo>/<version>.json`;
-- its version is already published;
+- its version is already published, or is lower than the highest published version in its major. A fix to an older major is fine, but a new major can't start below the newest version;
 - it is `manifest_version` 1, or has a v1 field (`client_side`, `server_side`, `download_url`, `sha256`, `package`, `library_dependencies`) at the top level;
 - its `id`, or a dependency's id, isn't a valid GitHub `owner.repo`, or it depends on itself;
 - an artifact's `download_url` isn't a GitHub release asset under the id's `owner/repo` (libraries may live on any `https://` host);

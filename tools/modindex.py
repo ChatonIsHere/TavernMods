@@ -391,6 +391,26 @@ def _targets_text(targets):
     return "+".join(sorted(targets)) if targets else "no target"
 
 
+def version_floor_error(m, known):
+    """Why m's version can't join the versions already published, or None.
+    Each major is its own line, so a fix to an older major is allowed, but a
+    release must beat its major's highest and a new major can't start below
+    the newest one."""
+    published = sorted((_vkey(v) for v in known.get(m["id"], {})), reverse=True)
+    v, show = _vkey(m["version"]), lambda k: ".".join(map(str, k))
+    if v in published:
+        return (f"{m['id']} {m['version']} is already published and a published "
+                f"version never changes; bump the version instead")
+    in_major = [p for p in published if p[0] == v[0]]
+    if in_major and v < in_major[0]:
+        return (f"{m['id']} {m['version']} is lower than {show(in_major[0])}, the highest "
+                f"published {v[0]}.x; use a higher version")
+    if not in_major and published and v[0] < published[0][0]:
+        return (f"{m['id']} {m['version']} would start major {v[0]}, below the newest "
+                f"published version {show(published[0])}; use a higher version")
+    return None
+
+
 def _resolve_dep_in_repo(known, dep_id, min_version):
     """The manifest an install would pick: highest in min_version's major that
     is >= it. None if this repo doesn't carry one."""
@@ -821,9 +841,8 @@ def cmd_validate(args):
 
         errs = validate_structure(m)
         warns = []
-        if not errs and m["version"] in known.get(m["id"], {}):
-            errs = [f"{m['id']} {m['version']} is already published and a published "
-                    f"version never changes; bump the version instead"]
+        if not errs and (floor := version_floor_error(m, known)):
+            errs = [floor]
         if not errs:
             errs, warns = validate_dependency_targets(m, known)
         if not errs:
