@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/Nyx12012/TavernEssentials/releases/download/v0.14.0/TavernEssentials-0.14.0.zip",
       "sha256": "c5a4e4b06c7f01357f548ffa3b18cbee2005e5325d559a3693ef93b54142a3ab",
+      "package": "zip",
       "library_dependencies": []
     }
   ]
