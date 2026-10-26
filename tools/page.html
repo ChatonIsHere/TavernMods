@@ -45,6 +45,7 @@
   h1 { font: 700 1.35rem/1.2 var(--serif); color: var(--primary); margin: 0 0 .15rem; }
   .lede { margin: 0; font-size: .82rem; }
   .lede code { font: .78rem var(--mono); color: var(--accent); }
+  .lede a { color: var(--primary); }
   .controls { display: flex; gap: .5rem; align-items: center; }
 
   .input {
@@ -117,9 +118,9 @@
     font-size: .66rem; letter-spacing: .02em; color: var(--muted-foreground); white-space: nowrap;
   }
   .badge.version { color: var(--primary); border-color: var(--primary-dim); }
-  .badge.pc { color: var(--accent); border-color: var(--accent); }
+  .badge.windows { color: var(--accent); border-color: var(--accent); }
   .badge.server { color: var(--success); border-color: var(--success); }
-  .badge.quest { color: var(--violet); border-color: var(--violet); }
+  .badge.android { color: var(--violet); border-color: var(--violet); }
   .badge.parity { color: var(--danger); border-color: var(--danger); }
   .badge[title] { cursor: help; }
   td .badges { flex-wrap: nowrap; }
@@ -135,6 +136,7 @@
       <p class="lede">
         Install from <strong>Mod Manager → Community Mods</strong> in TavernLauncher.
         A headless server takes the same ids in its <code>modlist</code>.
+        Mod authors: <a href="builder.html">build a manifest</a>.
       </p>
     </div>
     <div class="controls">
@@ -161,13 +163,13 @@ const hasTarget = (m, t) => (m.targets || []).includes(t);
 
 // Parity is only enforced on a mod a server runs that also has a client build.
 const parityApplies = (m) =>
-  m.parity_required && hasTarget(m, "server") && (hasTarget(m, "pc") || hasTarget(m, "quest"));
+  m.parity_required && hasTarget(m, "server") && (hasTarget(m, "client_windows") || hasTarget(m, "client_android"));
 
 const TAGS = [
-  [(m) => hasTarget(m, "pc"), "pc", "PC",
-   "Has a build for the game on PC: SteamVR, a Quest over Link, or flycam."],
+  [(m) => hasTarget(m, "client_windows"), "windows", "PC",
+   "Has a build for the game on Windows: SteamVR, a Quest over Link, or flycam."],
   [(m) => hasTarget(m, "server"), "server", "Server", "Has a build for game servers."],
-  [(m) => hasTarget(m, "quest"), "quest", "Quest",
+  [(m) => hasTarget(m, "client_android"), "android", "Quest",
    "Has a build for the standalone Quest headset. Nothing installs these yet."],
   [parityApplies, "parity", "Parity",
    "You need the server's exact version of this mod to join."],

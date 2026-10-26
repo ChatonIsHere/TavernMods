@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manifest Builder — The Modding Tavern</title>
+<meta name="description" content="Build a TavernMods manifest for submitting or updating a mod.">
+<style>
+  :root {
+    --background: #1a1210;
+    --foreground: #f0e6cc;
+    --card: #241c17;
+    --muted: #2e2218;
+    --muted-foreground: #d0c4aa;
+    --border: #4a3828;
+    --primary: #e8a840;
+    --primary-dim: #8a5e1a;
+    --accent: #6ab0aa;
+    --success: #6aaa72;
+    --danger: #e08585;
+    --ring: rgba(232, 168, 64, .35);
+    --radius: .5rem;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--background); color: var(--foreground);
+    font: 13.5px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--primary); }
+  code { font: .8rem var(--mono); color: var(--accent); }
+  .wrap { padding: 1.25rem 1rem 3rem; max-width: 76rem; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: .9rem; margin-bottom: 1rem; }
+  h1 { font: 700 1.35rem/1.2 var(--serif); color: var(--primary); margin: 0 0 .2rem; }
+  h2 { font: 700 1rem/1.3 var(--serif); color: var(--primary); margin: 0 0 .5rem; }
+  .lede { margin: 0; font-size: .85rem; color: var(--muted-foreground); }
+
+  .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 62rem) {
+    .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 26rem); align-items: start; }
+    .output { position: sticky; top: 1rem; }
+  }
+
+  section, .output, .item {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: .8rem .9rem;
+  }
+  section + section { margin-top: .8rem; }
+  .item { background: var(--muted); margin-bottom: .6rem; }
+  .hint { font-size: .78rem; color: var(--muted-foreground); margin: .1rem 0 .5rem; }
+
+  .grid { display: grid; gap: .55rem .7rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  label.field { display: flex; flex-direction: column; gap: .2rem; font-size: .78rem; color: var(--muted-foreground); }
+  input[type=text], input[type=url], textarea {
+    width: 100%; padding: .38rem .55rem; background: var(--background);
+    border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px);
+    color: var(--foreground); font: inherit;
+  }
+  input.mono { font-family: var(--mono); font-size: .8rem; }
+  input:focus, textarea:focus, button:focus-visible { outline: none; border-color: var(--primary-dim); box-shadow: 0 0 0 3px var(--ring); }
+  input::placeholder { color: #8f826d; }
+  .checks { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
+  .checks label { display: flex; gap: .35rem; align-items: center; cursor: pointer; }
+
+  .row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; }
+  .row > .field { flex: 1 1 11rem; }
+  .row > .field.wide { flex: 3 1 16rem; }
+
+  button {
+    padding: .38rem .75rem; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px);
+    background: var(--muted); color: var(--foreground); font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--primary-dim); }
+  button.primary { background: var(--primary); color: #1a1210; border-color: var(--primary); font-weight: 600; }
+  button.small { padding: .2rem .55rem; font-size: .78rem; }
+  button.remove { color: var(--danger); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+  .item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+  .item-head strong { font-family: var(--serif); }
+  .file-btn { position: relative; overflow: hidden; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .path { font: .8rem var(--mono); color: var(--accent); word-break: break-all; }
+  pre {
+    margin: .6rem 0 0; padding: .6rem; max-height: 26rem; overflow: auto;
+    background: var(--background); border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px);
+    font: .74rem/1.45 var(--mono); white-space: pre;
+  }
+  ul.problems { margin: .4rem 0 0; padding-left: 1.1rem; color: var(--danger); font-size: .8rem; }
+  .ok { color: var(--success); font-size: .82rem; margin: .4rem 0 0; }
+  .status { font-size: .8rem; color: var(--muted-foreground); min-height: 1.2em; margin-top: .4rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Manifest Builder</h1>
+    <p class="lede">
+      Fill this in to make the manifest for a new mod or a new version, then open the pull request or download the file.
+      Rules: <a id="docs-link" href="#">SUBMITTING.md</a>. Nothing you enter leaves your browser until you open the pull request.
+    </p>
+  </header>
+
+  <div class="layout">
+    <div id="form">
+      <section>
+        <h2>Mod</h2>
+        <p class="hint">The id is your GitHub <code>owner.repo</code>; every build must be a release asset of that repo.
+          Updating? Fill in the owner and repo and load what's published, then change the version, links and hashes.</p>
+        <div class="grid">
+          <label class="field">GitHub owner<input id="owner" type="text" placeholder="YourGitHubUser" autocomplete="off"></label>
+          <label class="field">GitHub repo<input id="repo" type="text" placeholder="YourRepo" autocomplete="off"></label>
+          <label class="field">Version<input id="version" type="text" placeholder="1.0.0" autocomplete="off"></label>
+          <label class="field">Name<input id="name" type="text" placeholder="Your Mod Name"></label>
+          <label class="field">Author<input id="author" type="text" placeholder="defaults to the owner"></label>
+        </div>
+        <label class="field" style="margin-top:.55rem">Description<input id="description" type="text" placeholder="One short line describing what the mod does."></label>
+        <div class="actions">
+          <button id="load-published" type="button">Load published manifest</button>
+          <span class="file-btn"><button type="button">Load a manifest file…</button><input id="load-file" type="file" accept=".json,application/json"></span>
+        </div>
+        <div id="load-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>Joining a server</h2>
+        <div class="checks" role="radiogroup">
+          <label><input type="radio" name="parity" value="true" checked> Players need this exact version to join a server running it</label>
+          <label><input type="radio" name="parity" value="false"> Optional: clients and servers can run different versions, or none</label>
+        </div>
+        <p class="hint">If unsure, keep the first: <code>parity_required: true</code>.</p>
+      </section>
+
+      <section>
+        <h2>Scenes</h2>
+        <p class="hint">Leave all unticked if the mod works in every scene. Tick only the ones it works in otherwise.</p>
+        <div id="scenes" class="checks"></div>
+      </section>
+
+      <section>
+        <h2>Builds</h2>
+        <p class="hint">One entry per file you ship: a <code>.dll</code>, or a <code>.zip</code> with the mod's DLL at its root.
+          One file can serve several targets, but each target can have only one build.
+          Hash a file here, or leave the hash empty and run <code>python tools/modindex.py fill-hashes</code> on the downloaded manifest.</p>
+        <div id="artifacts"></div>
+        <button id="add-artifact" type="button">+ Add build</button>
+      </section>
+
+      <section>
+        <h2>Dependencies</h2>
+        <p class="hint">Other mods this one needs, by id and minimum version. Shared DLLs belong under a build's libraries instead.</p>
+        <div id="dependencies"></div>
+        <button id="add-dependency" type="button">+ Add dependency</button>
+      </section>
+
+      <section>
+        <h2>Screenshots</h2>
+        <p class="hint">Optional, up to 4, shown on the mod page. A release asset of your repo, or a raw.githubusercontent.com link pinned to a commit; .png, .jpg, .webp or .gif.</p>
+        <div id="screenshots"></div>
+        <button id="add-screenshot" type="button">+ Add screenshot</button>
+      </section>
+    </div>
+
+    <aside class="output">
+      <h2>Your manifest</h2>
+      <div class="hint">Submit it as</div>
+      <div id="path" class="path"></div>
+      <div id="verdict"></div>
+      <div class="actions">
+        <button id="open-pr" class="primary" type="button">Open pull request</button>
+        <button id="download" type="button">Download</button>
+        <button id="copy" type="button">Copy</button>
+      </div>
+      <div id="out-status" class="status"></div>
+      <pre id="json"></pre>
+    </aside>
+  </div>
+</div>
+
+<script>
+const TARGETS = [
+  ["client_windows", "Windows client (SteamVR, Quest over Link, flycam)"],
+  ["server", "Server"],
+  ["client_android", "Standalone Quest (not installed by anything yet)"],
+];
+const SCENES = [["normal", "Normal"], ["quest", "Quest overworld"], ["tutorial", "Tutorial"]];
+const SHA_PLACEHOLDER = "run: python tools/modindex.py fill-hashes";
+const USER_RE = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/;
+const REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
+const VERSION_RE = /^\d+\.\d+\.\d+$/;
+const SHA_RE = /^[0-9a-f]{64}$/;
+const SHOT_RE = /\.(png|jpe?g|webp|gif)$/i;
+
+// The index this page belongs to: <owner>.github.io/<repo>/ on Pages, else the default.
+const INDEX = (() => {
+  const host = location.hostname, first = location.pathname.split("/")[1];
+  return host.endsWith(".github.io") && first
+    ? { owner: host.split(".")[0], repo: first, branch: "main" }
+    : { owner: "ModdingTavern", repo: "TavernMods", branch: "main" };
+})();
+const RAW = `https://raw.githubusercontent.com/${INDEX.owner}/${INDEX.repo}/${INDEX.branch}`;
+const $ = (id) => document.getElementById(id);
+$("docs-link").href = `https://github.com/${INDEX.owner}/${INDEX.repo}/blob/${INDEX.branch}/docs/SUBMITTING.md`;
+
+const blankArtifact = () => ({ targets: [], download_url: "", sha256: "", library_dependencies: [] });
+const blankLibrary = () => ({ name: "", download_url: "", sha256: "", filename: "" });
+let state = {
+  owner: "", repo: "", version: "", name: "", author: "", description: "",
+  parity: true, scenes: [], dependencies: [], screenshots: [], artifacts: [blankArtifact()],
+};
+let published = null;   // versions already in the index for the current id, once fetched
+
+// -- form ------------------------------------------------------------------------
+const el = (tag, props = {}, ...kids) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...kids);
+  return node;
+};
+const field = (label, value, onInput, opts = {}) => {
+  const input = el("input", { type: "text", value: value || "", placeholder: opts.placeholder || "",
+                               className: opts.mono ? "mono" : "", autocomplete: "off" });
+  input.addEventListener("input", () => { onInput(input.value); update(); });
+  return el("label", { className: "field" + (opts.wide ? " wide" : "") }, label, input);
+};
+const removeButton = (onClick) => {
+  const b = el("button", { type: "button", className: "small remove", textContent: "Remove" });
+  b.addEventListener("click", () => { onClick(); render(); });
+  return b;
+};
+
+async function sha256Of(file) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+const hashPicker = (obj) => {
+  const input = el("input", { type: "file" });
+  input.addEventListener("change", async () => {
+    if (!input.files[0]) return;
+    try { obj.sha256 = await sha256Of(input.files[0]); }
+    catch { alert("Couldn't hash the file here. Use fill-hashes, or a command from SUBMITTING.md."); }
+    render();
+  });
+  return el("span", { className: "file-btn" },
+            el("button", { type: "button", className: "small", textContent: "Hash a file…" }), input);
+};
+
+function renderArtifacts() {
+  const box = $("artifacts");
+  box.replaceChildren(...state.artifacts.map((a, i) => {
+    const checks = el("div", { className: "checks" }, ...TARGETS.map(([t, label]) => {
+      const cb = el("input", { type: "checkbox", checked: a.targets.includes(t) });
+      cb.addEventListener("change", () => {
+        a.targets = TARGETS.map(([x]) => x).filter(x => x === t ? cb.checked : a.targets.includes(x));
+        update();
+      });
+      return el("label", {}, cb, label);
+    }));
+    const libs = el("div", {}, ...a.library_dependencies.map((lib, j) => el("div", { className: "item", style: "background:var(--card)" },
+      el("div", { className: "item-head" }, el("strong", { textContent: `Library ${j + 1}` }),
+         removeButton(() => a.library_dependencies.splice(j, 1))),
+      el("div", { className: "row" },
+        field("Name", lib.name, v => lib.name = v, { placeholder: "ExampleLib" }),
+        field("File name in UserLibs/", lib.filename, v => lib.filename = v, { placeholder: "from the link" })),
+      el("div", { className: "row" }, field("Download link (any https://)", lib.download_url, v => lib.download_url = v, { wide: true, placeholder: "https://…/ExampleLib.dll" })),
+      el("div", { className: "row" }, field("SHA-256", lib.sha256, v => lib.sha256 = v.trim(), { wide: true, mono: true }), hashPicker(lib)))));
+    const addLib = el("button", { type: "button", className: "small", textContent: "+ Add library" });
+    addLib.addEventListener("click", () => { a.library_dependencies.push(blankLibrary()); render(); });
+    return el("div", { className: "item" },
+      el("div", { className: "item-head" }, el("strong", { textContent: `Build ${i + 1}` }),
+         state.artifacts.length > 1 ? removeButton(() => state.artifacts.splice(i, 1)) : ""),
+      el("div", { className: "hint", textContent: "Targets" }), checks,
+      el("div", { className: "row", style: "margin-top:.5rem" },
+        field("Release asset link", a.download_url, v => a.download_url = v.trim(),
+              { wide: true, placeholder: `https://github.com/${state.owner || "owner"}/${state.repo || "repo"}/releases/download/v1.0.0/Mod.dll` })),
+      el("div", { className: "row" }, field("SHA-256", a.sha256, v => a.sha256 = v.trim(), { wide: true, mono: true }), hashPicker(a)),
+      el("div", { className: "hint", style: "margin-top:.5rem", textContent: "Libraries: third-party or native DLLs installed to UserLibs/" }),
+      libs, addLib);
+  }));
+}
+
+function renderLists() {
+  $("dependencies").replaceChildren(...state.dependencies.map((d, i) => el("div", { className: "row", style: "margin-bottom:.5rem" },
+    field("Mod id", d.id, v => d.id = v.trim(), { placeholder: "SomeDev.UtilKit" }),
+    field("Minimum version", d.version, v => d.version = v.trim(), { placeholder: "1.0.0" }),
+    removeButton(() => state.dependencies.splice(i, 1)))));
+  $("screenshots").replaceChildren(...state.screenshots.map((s, i) => el("div", { className: "row", style: "margin-bottom:.5rem" },
+    field("Image link", s, v => state.screenshots[i] = v.trim(), { wide: true }),
+    removeButton(() => state.screenshots.splice(i, 1)))));
+  $("add-screenshot").disabled = state.screenshots.length >= 4;
+}
+
+function render() {
+  for (const k of ["owner", "repo", "version", "name", "author", "description"]) $(k).value = state[k];
+  document.querySelector(`input[name=parity][value="${state.parity}"]`).checked = true;
+  $("scenes").replaceChildren(...SCENES.map(([s, label]) => {
+    const cb = el("input", { type: "checkbox", checked: state.scenes.includes(s) });
+    cb.addEventListener("change", () => {
+      state.scenes = SCENES.map(([x]) => x).filter(x => x === s ? cb.checked : state.scenes.includes(x));
+      update();
+    });
+    return el("label", {}, cb, label);
+  }));
+  renderArtifacts();
+  renderLists();
+  update();
+}
+
+for (const k of ["owner", "repo", "version", "name", "author", "description"]) {
+  $(k).addEventListener("input", () => {
+    state[k] = k === "description" || k === "name" ? $(k).value : $(k).value.trim();
+    if (k === "owner" || k === "repo") published = null;
+    update();
+  });
+}
+for (const r of document.querySelectorAll("input[name=parity]"))
+  r.addEventListener("change", () => { state.parity = r.value === "true"; update(); });
+$("add-artifact").addEventListener("click", () => { state.artifacts.push(blankArtifact()); render(); });
+$("add-dependency").addEventListener("click", () => { state.dependencies.push({ id: "", version: "" }); render(); });
+$("add-screenshot").addEventListener("click", () => { state.screenshots.push(""); render(); });
+
+// -- manifest ----------------------------------------------------------------------
+const modId = () => `${state.owner}.${state.repo}`;
+const basename = (url) => { try { return decodeURIComponent(new URL(url).pathname.split("/").pop()); } catch { return ""; } };
+
+function manifest() {
+  const m = {
+    manifest_version: 2, id: modId(), name: state.name || modId(), version: state.version,
+    author: state.author || state.owner, description: state.description,
+  };
+  const shots = state.screenshots.filter(Boolean);
+  if (shots.length) m.screenshots = shots;
+  m.parity_required = state.parity;
+  if (state.scenes.length) m.scenes = [...state.scenes];
+  m.dependencies = Object.fromEntries(state.dependencies.filter(d => d.id).map(d => [d.id, d.version]));
+  m.artifacts = state.artifacts.map(a => ({
+    targets: [...a.targets],
+    download_url: a.download_url,
+    sha256: a.sha256 || SHA_PLACEHOLDER,
+    library_dependencies: a.library_dependencies.map(l => ({
+      name: l.name, download_url: l.download_url, sha256: l.sha256 || SHA_PLACEHOLDER,
+      filename: l.filename || basename(l.download_url),
+    })),
+  }));
+  return m;
+}
+
+function isHttps(url) { try { return new URL(url).protocol === "https:"; } catch { return false; } }
+function ownedBy(url) {
+  try {
+    const u = new URL(url), parts = u.pathname.split("/").filter(Boolean);
+    return u.protocol === "https:" && u.hostname.toLowerCase() === "github.com" && parts.length >= 2
+      && parts[0].toLowerCase() === state.owner.toLowerCase() && parts[1].toLowerCase() === state.repo.toLowerCase();
+  } catch { return false; }
+}
+const versionProblem = (v, what) => !VERSION_RE.test(v) ? `${what} must be MAJOR.MINOR.PATCH, like 1.0.0.`
+  : v.split(".").some(x => Number(x) > 2147483647) ? `${what} has a number over 2147483647.` : null;
+const bareName = (n) => n && n !== "." && n !== ".." && !/[\/\\:]/.test(n);
+
+// The same rules as tools/modindex.py validate; the hashes are only checked for shape here.
+function problems(m) {
+  const out = [], hashless = [];
+  if (!USER_RE.test(state.owner)) out.push("The owner must be a GitHub user or organisation name.");
+  if (!REPO_RE.test(state.repo) || state.repo === "." || state.repo === "..") out.push("The repo must be a GitHub repository name.");
+  const vp = versionProblem(state.version, "The version");
+  if (vp) out.push(vp);
+  else if (published && published.includes(state.version)) out.push(`${state.version} is already published. Bump the version.`);
+  for (const d of state.dependencies) {
+    if (!d.id) continue;
+    const [u, r] = d.id.split(/\.(.*)/s);
+    if (!r || !USER_RE.test(u) || !REPO_RE.test(r)) out.push(`Dependency "${d.id}" isn't an owner.repo id.`);
+    else if (d.id === modId()) out.push("A mod can't depend on itself.");
+    const p = versionProblem(d.version, `Dependency ${d.id}'s minimum version`);
+    if (p) out.push(p);
+  }
+  if (state.scenes.length === SCENES.length) out.push("All scenes are ticked: untick them all instead, which means the same.");
+  const claimed = {};
+  m.artifacts.forEach((a, i) => {
+    const n = `Build ${i + 1}`;
+    if (!a.targets.length) out.push(`${n} has no target ticked.`);
+    for (const t of a.targets) {
+      if (t in claimed) out.push(`${n} and build ${claimed[t] + 1} both target ${t}; each target can have only one build.`);
+      else claimed[t] = i;
+    }
+    if (!a.download_url) out.push(`${n} needs its release asset link.`);
+    else if (!ownedBy(a.download_url)) out.push(`${n}'s link must be a release asset under github.com/${state.owner || "owner"}/${state.repo || "repo"}.`);
+    if (a.sha256 === SHA_PLACEHOLDER) hashless.push(n);
+    else if (!SHA_RE.test(a.sha256)) out.push(`${n}'s SHA-256 must be 64 lowercase hex characters.`);
+    a.library_dependencies.forEach((l, j) => {
+      const ln = `${n}, library ${j + 1}`;
+      if (!l.name) out.push(`${ln} needs a name.`);
+      if (!isHttps(l.download_url)) out.push(`${ln} needs an https:// download link.`);
+      if (!bareName(l.filename)) out.push(`${ln}'s file name must be a plain file name.`);
+      if (l.sha256 === SHA_PLACEHOLDER) hashless.push(ln);
+      else if (!SHA_RE.test(l.sha256)) out.push(`${ln}'s SHA-256 must be 64 lowercase hex characters.`);
+    });
+  });
+  (m.screenshots || []).forEach((s, i) => {
+    if (!isHttps(s) || !SHOT_RE.test(new URL(s).pathname)) out.push(`Screenshot ${i + 1} must be an https:// .png, .jpg, .webp or .gif link.`);
+  });
+  return { errors: out, hashless };
+}
+
+const fileName = () => `${state.version || "<version>"}.json`;
+const submissionPath = () => `submissions/${state.owner || "<owner>"}.${state.repo || "<repo>"}/${fileName()}`;
+const text = () => JSON.stringify(manifest(), null, 2) + "\n";
+
+function update() {
+  const m = manifest(), { errors, hashless } = problems(m);
+  $("path").textContent = submissionPath();
+  $("json").textContent = text();
+  const verdict = $("verdict");
+  if (errors.length || hashless.length) {
+    const items = [...errors];
+    if (hashless.length) items.push(`No hash yet for ${hashless.join(", ")}: hash the file here, or download and run fill-hashes.`);
+    verdict.replaceChildren(el("ul", { className: "problems" }, ...items.map(p => el("li", { textContent: p }))));
+  } else {
+    verdict.replaceChildren(el("p", { className: "ok", textContent: "Ready to submit. The automated checks still download every file and compare the hashes." }));
+  }
+  $("open-pr").disabled = errors.length > 0 || hashless.length > 0;
+  try { localStorage.setItem("builder-draft", JSON.stringify(state)); } catch {}
+}
+
+// -- loading -------------------------------------------------------------------------
+function loadManifest(m) {
+  if (!m || typeof m !== "object" || !Array.isArray(m.artifacts)) throw new Error("That isn't a manifest_version 2 manifest.");
+  const [owner, repo] = String(m.id || ".").split(/\.(.*)/s);
+  state = {
+    owner: owner || "", repo: repo || "", version: m.version || "", name: m.name || "",
+    author: m.author || "", description: m.description || "",
+    parity: m.parity_required !== false, scenes: Array.isArray(m.scenes) ? m.scenes.filter(s => SCENES.some(([x]) => x === s)) : [],
+    dependencies: Object.entries(m.dependencies || {}).map(([id, version]) => ({ id, version: String(version) })),
+    screenshots: Array.isArray(m.screenshots) ? m.screenshots.slice(0, 4) : [],
+    artifacts: m.artifacts.map(a => ({
+      targets: TARGETS.map(([t]) => t).filter(t => (a.targets || []).includes(t)),
+      download_url: a.download_url || "", sha256: SHA_RE.test(a.sha256 || "") ? a.sha256 : "",
+      library_dependencies: (a.library_dependencies || []).map(l => ({
+        name: l.name || "", download_url: l.download_url || "",
+        sha256: SHA_RE.test(l.sha256 || "") ? l.sha256 : "", filename: l.filename || "" })),
+    })),
+  };
+  if (!state.artifacts.length) state.artifacts = [blankArtifact()];
+  published = null;
+  render();
+  fetchPublished();
+}
+
+async function fetchPublished() {
+  if (!USER_RE.test(state.owner) || !REPO_RE.test(state.repo)) return;
+  try {
+    const r = await fetch(`${RAW}/repository.json`, { cache: "no-store" });
+    const majors = (await r.json()).mods?.[modId()] || {};
+    published = Object.values(majors).flatMap(e => e.versions || []);
+    update();
+  } catch {}
+}
+
+$("load-published").addEventListener("click", async () => {
+  const status = $("load-status");
+  if (!USER_RE.test(state.owner) || !REPO_RE.test(state.repo)) { status.textContent = "Fill in the owner and repo first."; return; }
+  status.textContent = "Loading…";
+  try {
+    const r = await fetch(`${RAW}/manifests/${state.owner}/${state.repo}/latest.json`, { cache: "no-store" });
+    if (!r.ok) { status.textContent = `${modId()} isn't published in ${INDEX.owner}/${INDEX.repo} yet.`; return; }
+    const m = await r.json();
+    loadManifest(m);
+    $("load-status").textContent = `Loaded ${m.version}. Set the new version, then update each build's link and hash.`;
+  } catch (e) { status.textContent = "Couldn't load it: " + e.message; }
+});
+$("load-file").addEventListener("change", async (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  try { loadManifest(JSON.parse(await f.text())); $("load-status").textContent = `Loaded ${f.name}.`; }
+  catch (e) { $("load-status").textContent = "Couldn't load it: " + e.message; }
+  ev.target.value = "";
+});
+
+// -- output --------------------------------------------------------------------------
+$("download").addEventListener("click", () => {
+  const a = el("a", { href: URL.createObjectURL(new Blob([text()], { type: "application/json" })), download: fileName() });
+  a.click();
+  URL.revokeObjectURL(a.href);
+  $("out-status").textContent = `Saved ${fileName()}. It goes in ${submissionPath()}.`;
+});
+$("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(text()); $("out-status").textContent = "Copied."; }
+  catch { $("out-status").textContent = "Couldn't copy; select the text below instead."; }
+});
+// GitHub's new-file page forks the index for you and offers to open the pull request.
+$("open-pr").addEventListener("click", () => {
+  const q = new URLSearchParams({ filename: submissionPath(), value: text() });
+  window.open(`https://github.com/${INDEX.owner}/${INDEX.repo}/new/${INDEX.branch}?${q}`, "_blank", "noopener");
+});
+
+try {
+  const draft = JSON.parse(localStorage.getItem("builder-draft") || "null");
+  if (draft && Array.isArray(draft.artifacts)) state = { ...state, ...draft };
+} catch {}
+render();
+fetchPublished();
+</script>
+</body>
+</html>

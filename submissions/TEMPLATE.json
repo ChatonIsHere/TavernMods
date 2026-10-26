@@ -9,7 +9,7 @@
   "dependencies": {},
   "artifacts": [
     {
-      "targets": ["pc", "server"],
+      "targets": ["client_windows", "server"],
       "download_url": "https://github.com/YourGitHubUser/YourRepo/releases/download/v1.0.0/YourMod.dll",
       "sha256": "run: python tools/modindex.py fill-hashes",
       "library_dependencies": []

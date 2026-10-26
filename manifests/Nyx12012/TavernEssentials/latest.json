@@ -10,7 +10,7 @@
   "artifacts": [
     {
       "targets": [
-        "pc",
+        "client_windows",
         "server"
       ],
       "download_url": "https://github.com/Nyx12012/TavernEssentials/releases/download/v0.14.0/TavernEssentials-0.14.0.zip",

@@ -21,11 +21,11 @@ A target is the build a process runs, not a game scene.
 
 | Target | Runs on |
 | --- | --- |
-| `pc` | The game on a PC as a player: SteamVR, a Quest over Link, or flycam. One Windows build. |
-| `server` | A game server, launcher-run or headless. Always the PC build. |
-| `quest` | The standalone Quest headset (Android build). Validated, but nothing installs it yet. |
+| `client_windows` | The game on Windows as a player: SteamVR, a Quest over Link, or flycam. |
+| `server` | A game server, launcher-run or headless (Windows). |
+| `client_android` | The standalone Quest headset. Validated, but nothing installs it yet. |
 
-A PC player joining a server in the quest scene still gets `pc`.
+A client always gets its own platform's build, whatever scene the server runs.
 
 ## repository.json
 
@@ -39,7 +39,7 @@ A PC player joining a server in the quest scene still gets `pc`.
         "author": "ExampleDev",
         "description": "Does something useful.",
         "parity_required": true,
-        "targets": ["pc", "server"],
+        "targets": ["client_windows", "server"],
         "scenes": ["normal", "quest"],   // only when set
         "versions": ["1.0.0", "1.2.0"]   // every release in this major
       }
@@ -69,7 +69,7 @@ The `<version>.json` and `latest*.json` files.
   "dependencies": { "SomeDev.UtilKit": "1.2.0" },
   "artifacts": [
     {
-      "targets": ["pc", "server"],
+      "targets": ["client_windows", "server"],
       "download_url": "https://github.com/ExampleDev/ExampleMod/releases/download/v1.2.0/ExampleMod.dll",
       "sha256": "<64 lowercase hex>",
       "package": "dll",
@@ -83,8 +83,8 @@ The `<version>.json` and `latest*.json` files.
       ]
     },
     {
-      "targets": ["quest"],
-      "download_url": "https://github.com/ExampleDev/ExampleMod/releases/download/v1.2.0/ExampleMod-quest.zip",
+      "targets": ["client_android"],
+      "download_url": "https://github.com/ExampleDev/ExampleMod/releases/download/v1.2.0/ExampleMod-android.zip",
       "sha256": "<64 lowercase hex>",
       "package": "zip",
       "library_dependencies": []
@@ -118,7 +118,7 @@ There is no mod-level `filename`.
 
 **Unknown names.** Readers ignore unknown target names (and an artifact left with no known target) and keep unknown scene names, so later additions don't break old builds. This repo's validator rejects both.
 
-**Dependencies** are other mods, each in its own `Mods/<id>/`, resolved with conflict detection. The candidates are the versions in the minimum's major at or above it; the highest wins. Each install is for one target (`pc` from the client launcher, `server` from the server launcher and TavernLib). A dependency with no artifact for that target is left out, along with anything only it needed, and the installer logs it. This repo's validator rejects a dependency that shares no target with the mod, and notes one that covers only some of its targets.
+**Dependencies** are other mods, each in its own `Mods/<id>/`, resolved with conflict detection. The candidates are the versions in the minimum's major at or above it; the highest wins. Each install is for one target (`client_windows` from the client launcher, `server` from the server launcher and TavernLib). A dependency with no artifact for that target is left out, along with anything only it needed, and the installer logs it. This repo's validator rejects a dependency that shares no target with the mod, and notes one that covers only some of its targets.
 
 **Libraries** install flat to `UserLibs/<filename>`, pinned by `filename` and `sha256`: no version resolution, no ownership check, any `https://` host. The same `filename` with the same `sha256` installs once, whatever the URLs. The same `filename` with a different `sha256` anywhere in the game folder, for any target, is a conflict, and the install is refused.
 
@@ -136,19 +136,19 @@ Others are skipped, with the reason in the build log.
 
 ```
 <game>/Mods/<id>/manifest.json          install record (manifest.disabled.json when disabled)
-<game>/Mods/<id>/.pc/                   pc build
+<game>/Mods/<id>/.client_windows/       client_windows build
 <game>/Mods/<id>/.server/               server build
 <game>/UserLibs/<filename>              library
 <game>/UserLibs/<filename>.meta.json    library sidecar: { filename, sha256, download_url }
 ```
 
-- The client launcher installs only `pc`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's. Nothing else goes directly in `Mods/<id>/`.
+- The client launcher installs only `client_windows`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's. Nothing else goes directly in `Mods/<id>/`.
 - A *bare basename* is a name other than empty, `.` or `..`, with no `/`, `\` or `:`.
 - `dll`: saved into the target folder under the `download_url`'s basename if that is a bare basename ending in `.dll`, else as `<id>.dll`.
 - `zip`: extracted into the target folder. A member with an absolute path, a colon, a `..` that escapes, or a symlink refuses the whole install. A member that resolves (case-insensitively, after `.` and `..`) to `manifest.json` or `manifest.disabled.json` at the root is skipped.
 - A library `filename` must be a bare basename.
 
-**Which build loads.** MelonLoader 0.7 loads a `Mods/<name>/` folder that contains a `manifest.json` (it only checks the file exists), plus every subfolder except those starting with `.` or `~` (and a few reserved names). So it loads neither `.pc/` nor `.server/`. TavernLib adds one back: `.server/` in a server process (started with `/start_server`), `.pc/` otherwise. It adds that folder and its non-excluded subfolders to MelonLoader's mod folders and assembly search path, only for mods whose record is enabled, ours, and lists that target in `installed`. Without TavernLib, managed mods don't load; a process never loads two builds.
+**Which build loads.** MelonLoader 0.7 loads a `Mods/<name>/` folder that contains a `manifest.json` (it only checks the file exists), plus every subfolder except those starting with `.` or `~` (and a few reserved names). So it loads neither `.client_windows/` nor `.server/`. TavernLib adds one back: `.server/` in a server process (started with `/start_server`), `.client_windows/` otherwise. It adds that folder and its non-excluded subfolders to MelonLoader's mod folders and assembly search path, only for mods whose record is enabled, ours, and lists that target in `installed`. Without TavernLib, managed mods don't load; a process never loads two builds.
 
 ## Install record
 
@@ -168,7 +168,7 @@ Others are skipped, with the reason in the build log.
   "artifacts": [ ... ],
   "source_repo": "https://raw.githubusercontent.com/.../main",
   "installed": {
-    "pc": {
+    "client_windows": {
       "sha256": "<the installed artifact's sha256>",
       "libraries": ["ExampleLib.dll"],
       "files": { "ExampleMod.dll": "<sha256>" }
@@ -203,25 +203,25 @@ A mod is **running** on a server when its record is enabled, ours, and lists `se
   "version": "1.2.0",
   "parity_required": true,
   "source_repo": "https://raw.githubusercontent.com/.../main",   // a hint, never a pull source
-  "targets": ["pc", "server"],                                    // known targets of the record's usable artifacts, sorted
-  "target_sha256": { "pc": "<sha>", "server": "<sha>" },          // per target, from the record's artifacts
+  "targets": ["client_windows", "server"],                        // known targets of the record's usable artifacts, sorted
+  "target_sha256": { "client_windows": "<sha>", "server": "<sha>" }, // per target, from the record's artifacts
   "scenes": ["normal"]                                            // only when set
 }
 ```
 
 `mods_hash` is the sha256 of these lines joined with `\n`: `<id>@<version>@req` (or `@opt` when `parity_required` is false) for each running mod, sorted by id; then `untracked:<name>@<mtime>` for each enabled untracked mod, sorted by lowercased name. Nothing else (`targets`, hashes, `scenes`) goes in it.
 
-**What a PC client does.** It always installs the `pc` artifact, whatever the server runs or its scene. Of the server's `mods`, it considers only those whose `targets` include `pc`:
+**What a Windows client does.** It always installs the `client_windows` artifact, whatever the server runs or its scene. Of the server's `mods`, it considers only those whose `targets` include `client_windows`:
 
 - `parity_required: true`: installed at that exact version, or the launch is refused.
 - `parity_required: false`: offered, ticked by default; the player can decline.
 
-It leaves out its own pinned mods that don't support the server's scene, and never second-guesses the server's. If its installed `pc` sha256 differs from `target_sha256.pc`, it notes the mismatch without blocking. It launches the game with a `TavernMods` claim, `{id: version}` for every enabled mod installed for `pc`.
+It leaves out its own pinned mods that don't support the server's scene, and never second-guesses the server's. If its installed `client_windows` sha256 differs from `target_sha256.client_windows`, it notes the mismatch without blocking. It launches the game with a `TavernMods` claim, `{id: version}` for every enabled mod installed for `client_windows`.
 
 **What the server enforces** (TavernLib, at join):
 
-- A join with a claim must hold the exact version of every running mod with `parity_required: true` whose `targets` include `pc`.
-- A join with no claim, or an unreadable one (the standalone Quest app, TavernEssentials' in-game board, a direct connect), is refused if any running mod has `parity_required: true` and `targets` including `pc` or `quest`, and admitted otherwise.
+- A join with a claim must hold the exact version of every running mod with `parity_required: true` whose `targets` include `client_windows`.
+- A join with no claim, or an unreadable one (the standalone Quest app, TavernEssentials' in-game board, a direct connect), is refused if any running mod has `parity_required: true` and `targets` including `client_windows` or `client_android`, and admitted otherwise.
 - Untracked mods are ignored both ways. The claim is self-reported.
 
 **Scenes on a server.** A headless server skips a mod whose `scenes` exclude the scene it launches into, and disables an installed copy. The server launcher asks before installing such a mod and warns at start.
