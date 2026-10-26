@@ -39,7 +39,9 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: python tools/modindex.py site
+      - run: |
+          python tools/modindex.py site
+          cp tools/builder.html site/
 
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

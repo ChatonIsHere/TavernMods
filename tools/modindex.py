@@ -31,7 +31,7 @@ from urllib.parse import urlparse
 
 SUPPORTED_MANIFEST_MAJOR = 2
 SUPPORTED_INDEX_MAJOR = 2
-TARGETS = ("pc", "server", "quest")
+TARGETS = ("client_windows", "server", "client_android")
 SCENES = ("normal", "quest", "tutorial")
 _PACKAGE_TYPES = ("dll", "zip")
 
@@ -49,8 +49,8 @@ _ARTIFACT_ORDER = ["targets", "download_url", "sha256", "package", "library_depe
 _LIB_ORDER = ["name", "download_url", "sha256", "filename"]
 
 _V1_FIELDS = {
-    "client_side": "replaced by the targets of each entry in artifacts (pc, server, quest)",
-    "server_side": "replaced by the targets of each entry in artifacts (pc, server, quest)",
+    "client_side": "replaced by the targets of each entry in artifacts (client_windows, server, client_android)",
+    "server_side": "replaced by the targets of each entry in artifacts (client_windows, server, client_android)",
     "download_url": "moved into each entry of artifacts",
     "sha256": "moved into each entry of artifacts",
     "package": "moved into each entry of artifacts (and set by the tooling, not written)",
@@ -61,9 +61,10 @@ _V1_MESSAGE = (
     "manifest_version 1 is the old format; this repo takes manifest_version 2. "
     "What changed: client_side / server_side are gone, replaced by an "
     "\"artifacts\" list where each entry names the targets it is built for "
-    "(\"pc\", \"server\", \"quest\") and carries its own download_url, sha256 "
-    "and library_dependencies. A mod that ships one DLL for players and servers "
-    "has one artifact with \"targets\": [\"pc\", \"server\"]. See "
+    "(\"client_windows\", \"server\", \"client_android\") and carries its own "
+    "download_url, sha256 and library_dependencies. A mod that ships one DLL for "
+    "players and servers "
+    "has one artifact with \"targets\": [\"client_windows\", \"server\"]. See "
     "submissions/TEMPLATE.json and docs/REPO_STRUCTURE.md.")
 
 # Zip limits; the launcher's extractor applies the same ones at install time.

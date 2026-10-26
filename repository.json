@@ -8,7 +8,7 @@
         "description": "What a modded A Township Tale server and its players need to get back to normal, in one DLL.",
         "parity_required": false,
         "targets": [
-          "pc",
+          "client_windows",
           "server"
         ],
         "versions": [
