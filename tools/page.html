@@ -112,6 +112,9 @@
   td.ver { color: var(--primary); font-family: var(--mono); }
   td.id { font: .74rem var(--mono); color: var(--muted-foreground); }
 
+  a.plain { color: inherit; text-decoration: none; }
+  a.plain:hover { color: var(--primary); text-decoration: underline; }
+
   .badges { display: flex; flex-wrap: wrap; gap: .25rem; }
   .badge {
     padding: .05rem .4rem; border: 1px solid var(--border); border-radius: 999px;
@@ -190,6 +193,19 @@ const put = (parent, tag, cls, value) => {
   return node;
 };
 
+// The id is a validated GitHub owner.repo; owners can't contain dots.
+const owner = (m) => text(m.id).split(".")[0];
+const repoUrl = (m) => `https://github.com/${owner(m)}/${text(m.id).slice(owner(m).length + 1)}`;
+const ownerUrl = (m) => `https://github.com/${owner(m)}`;
+
+const link = (parent, href, value) => {
+  const a = put(parent, "a", "plain", value);
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
+};
+
 const card = (m) => {
   const node = document.createElement("article");
   node.className = "card";
@@ -205,8 +221,10 @@ const card = (m) => {
     shot.textContent = text(m.name);
   }
   const body = put(node, "div", "card-body");
-  put(body, "div", "card-title", m.name);
-  put(body, "div", "card-meta", `by ${text(m.author)}`);
+  link(put(body, "div", "card-title"), repoUrl(m), m.name).title = "Source on GitHub";
+  const meta = put(body, "div", "card-meta");
+  meta.append("by ");
+  link(meta, ownerUrl(m), m.author);
   put(body, "p", "card-desc", m.description);
   const badges = put(body, "div", "badges");
   put(badges, "span", "badge version", m.latest);
@@ -223,9 +241,9 @@ const table = (list) => {
   const body = put(node, "tbody");
   for (const m of list) {
     const row = body.insertRow();
-    put(row, "td", "name", m.name).title = text(m.name);
+    link(put(row, "td", "name"), repoUrl(m), m.name).title = text(m.name);
     put(row, "td", "id", m.id).title = m.id;
-    put(row, "td", null, m.author);
+    link(put(row, "td"), ownerUrl(m), m.author);
     put(row, "td", "ver", m.latest);
     tags(put(put(row, "td"), "div", "badges"), m);
     put(row, "td", null, m.description).title = text(m.description);
