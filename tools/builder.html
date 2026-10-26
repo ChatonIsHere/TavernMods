@@ -84,6 +84,9 @@
   .file-btn { position: relative; overflow: hidden; }
   .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+  ol.steps { font-size: .8rem; margin: .5rem 0 0; padding-left: 1.2rem; }
+  ol.steps li { margin-bottom: .25rem; }
+  ol.steps a { color: var(--primary); }
   .path { font: .8rem var(--mono); color: var(--accent); word-break: break-all; }
   pre {
     margin: .6rem 0 0; padding: .6rem; max-height: 26rem; overflow: auto;
@@ -172,8 +175,13 @@
       <div class="hint">Submit it as</div>
       <div id="path" class="path"></div>
       <div id="verdict"></div>
+      <label class="field" style="margin-top:.6rem">Your GitHub username<input id="submitter" type="text" autocomplete="off" placeholder="defaults to the owner"></label>
+      <ol class="steps">
+        <li><a id="fork-link" target="_blank" rel="noopener">Fork the index</a> on GitHub, once. Only maintainers can add files to it directly.</li>
+        <li>Press <strong>Add to your fork</strong>. In GitHub's commit dialog, pick <em>Create a new branch</em>, then <strong>Propose changes</strong> and <strong>Create pull request</strong>.</li>
+      </ol>
       <div class="actions">
-        <button id="open-pr" class="primary" type="button">Open pull request</button>
+        <button id="open-pr" class="primary" type="button">Add to your fork</button>
         <button id="download" type="button">Download</button>
         <button id="copy" type="button">Copy</button>
       </div>
@@ -462,7 +470,7 @@ function update() {
   } else {
     verdict.replaceChildren(el("p", { className: "ok", textContent: "Ready to submit. The automated checks still download every file and compare the hashes." }));
   }
-  $("open-pr").disabled = errors.length > 0 || hashless.length > 0;
+  $("open-pr").disabled = errors.length > 0 || hashless.length > 0 || !USER_RE.test(submitter());
   const pub = USER_RE.test(state.owner) && REPO_RE.test(state.repo) ? publishedOf(modId()) : [];
   $("published-hint").textContent = pub.length
     ? `${modId()} is published: ${pub.slice(0, 5).join(", ")}${pub.length > 5 ? ", …" : ""}. Load the latest to start from it.`
@@ -541,10 +549,18 @@ $("copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(text()); $("out-status").textContent = "Copied."; }
   catch { $("out-status").textContent = "Couldn't copy; select the text below instead."; }
 });
-// GitHub's new-file page forks the index for you and offers to open the pull request.
+// Only collaborators can add a file to the index itself, so the file goes to the
+// submitter's fork, whose pull requests target the index by default.
+const submitter = () => $("submitter").value.trim() || state.owner;
+$("fork-link").href = `https://github.com/${INDEX.owner}/${INDEX.repo}/fork`;
+try { $("submitter").value = localStorage.getItem("builder-submitter") || ""; } catch {}
+$("submitter").addEventListener("input", () => {
+  try { localStorage.setItem("builder-submitter", $("submitter").value.trim()); } catch {}
+  update();
+});
 $("open-pr").addEventListener("click", () => {
   const q = new URLSearchParams({ filename: submissionPath(), value: text() });
-  window.open(`https://github.com/${INDEX.owner}/${INDEX.repo}/new/${INDEX.branch}?${q}`, "_blank", "noopener");
+  window.open(`https://github.com/${submitter()}/${INDEX.repo}/new/${INDEX.branch}?${q}`, "_blank", "noopener");
 });
 
 try {
