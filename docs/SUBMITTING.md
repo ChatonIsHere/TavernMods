@@ -5,7 +5,7 @@ Every launcher trusts this repo by default, so a mod gets in only after automate
 ## Submitting
 
 1. Publish each build as a release asset on your mod's GitHub repo: one `.dll`, or a `.zip` when it has several DLLs or asset bundles. One file can serve several targets (`client_windows`, `server`, `client_android`).
-2. Write the manifest. The easiest way is the [manifest builder](https://moddingtavern.github.io/TavernMods/builder.html), which checks it as you type. Or copy [`submissions/TEMPLATE.json`](../submissions/TEMPLATE.json) and fill it in by hand, following [REPO_STRUCTURE.md](REPO_STRUCTURE.md): one `artifacts` entry per build, and leave out `package`.
+2. Write the manifest. The easiest way is the [manifest builder](https://moddingtavern.github.io/TavernMods/builder.html), which checks it as you type. Paste your release link at the top and it fills in the id, version, build links and hashes. Or copy [`submissions/TEMPLATE.json`](../submissions/TEMPLATE.json) and fill it in by hand, following [REPO_STRUCTURE.md](REPO_STRUCTURE.md): one `artifacts` entry per build, and leave out `package`.
 3. Fill in each build's and library's `sha256`, using the exact file you uploaded. Any of these works:
    - the builder's **Hash a file** button;
    - the script, which downloads every file in the manifest and writes the hashes in:
@@ -25,7 +25,7 @@ Set `parity_required` to `false` only if clients and servers can run different v
 
 ## Updating
 
-Publish a new release with a higher version, then submit it as above: a new file at `submissions/<owner>.<repo>/<new version>.json`. In the builder, enter your owner and repo and press **Load published manifest**, then change the version, links and hashes. The launcher offers the update to anyone who has the mod.
+Publish a new release with a higher version, then submit it as above: a new file at `submissions/<owner>.<repo>/<new version>.json`. In the builder, paste the new release's link at the top: it starts from your published manifest and swaps in the new version, links and hashes. Check anything else that changed. The launcher offers the update to anyone who has the mod.
 
 A published version never changes. To fix a build, bump the version; a resubmission of an existing version is rejected. A new version must be higher than the last one in its major, so you can still ship 1.4.1 after 2.0.0 for anyone held on 1.x.
 
