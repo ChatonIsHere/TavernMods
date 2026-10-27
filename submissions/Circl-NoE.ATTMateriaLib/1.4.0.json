@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "Circl-NoE.ATTMateriaLib",
+  "name": "MateriaLib",
+  "version": "1.4.0",
+  "author": "Circl-NoE",
+  "description": "Library mod to allow easy creation of physical materials for ATT",
+  "parity_required": true,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/Circl-NoE/ATTMateriaLib/releases/download/v1.4.0/MateriaLib.dll",
+      "sha256": "eda423fc68f711218f855b196a7a34489d447c3f7386dc34c52208a87f366ce3",
+      "library_dependencies": []
+    }
+  ]
+}

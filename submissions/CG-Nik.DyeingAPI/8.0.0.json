@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "id": "CG-Nik.DyeingAPI",
+  "name": "DyeingAPI",
+  "version": "8.0.0",
+  "author": "CG-Nik",
+  "description": "An API mod for A Township Tale that adds a Dyeing system.",
+  "parity_required": true,
+  "dependencies": {
+    "Circl-NoE.ATTMateriaLib": "1.4.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/CG-Nik/DyeingAPI/releases/download/v8/DyeingAPI.dll",
+      "sha256": "15ffcb388c70eff1555ebda86f9a26d48a8c50424e669da206097dd927b2533d",
+      "library_dependencies": []
+    }
+  ]
+}
