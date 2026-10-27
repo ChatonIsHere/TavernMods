@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "MrDuckTheFifth.SyncLib",
+  "name": "SyncLib",
+  "version": "1.0.4",
+  "author": "MrDuckTheFifth",
+  "description": "SyncLib is a library mod for A Township Tale that enables custom items to be easily implemented by other modders. As well as other generic use cases to make networking more easier.",
+  "parity_required": true,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/MrDuckTheFifth/SyncLib/releases/download/1.0.4/SyncLib.dll",
+      "sha256": "3aa9f2817f12fcaa3c75554340e912b75b0d5cd4ee7de5c0c0a69cadac347044",
+      "library_dependencies": []
+    }
+  ]
+}

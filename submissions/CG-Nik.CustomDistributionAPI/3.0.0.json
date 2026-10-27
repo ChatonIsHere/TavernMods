@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "CG-Nik.CustomDistributionAPI",
+  "name": "CustomDistributionAPI",
+  "version": "3.0.0",
+  "author": "CG-Nik",
+  "description": "An API mod for A Township Tale that helps with creating custom Distributions (and adding to Distributions).",
+  "parity_required": false,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/CG-Nik/CustomDistributionAPI/releases/download/v3/CustomDistributionAPI.dll",
+      "sha256": "29cfc8afb342a4af883e542ac332f8bb07c557e35202bcdcb13ce935a28d9470",
+      "library_dependencies": []
+    }
+  ]
+}
