@@ -104,16 +104,27 @@
     <h1>Manifest Builder</h1>
     <p class="lede">
       Fill this in to make the manifest for a new mod or a new version, then open the pull request or download the file.
-      Rules: <a id="docs-link" href="#">SUBMITTING.md</a>. Nothing you enter leaves your browser until you open the pull request.
+      Rules: <a id="docs-link" href="#">SUBMITTING.md</a>. A release link is looked up through GitHub's API; nothing else you enter leaves your browser until you submit.
     </p>
   </header>
 
   <div class="layout">
     <div id="form">
       <section>
+        <h2>Start from a release</h2>
+        <p class="hint">Paste a link to your GitHub release, or to one of its files. The builder fills in the owner, repo, version, each build's link and its hash.
+          If the mod is already listed, everything else carries over from the published version.</p>
+        <div class="row">
+          <label class="field wide">Release link<input id="release-url" type="text" autocomplete="off" placeholder="https://github.com/you/YourMod/releases/tag/v1.0.0"></label>
+          <button id="from-release" type="button">Fill in</button>
+        </div>
+        <div id="release-status" class="status"></div>
+      </section>
+
+      <section>
         <h2>Mod</h2>
         <p class="hint">The id is your GitHub <code>owner.repo</code>; every build must be a release asset of that repo.
-          Updating? Fill in the owner and repo and load what's published, then change the version, links and hashes.</p>
+          Updating? Start from the new release above, or fill in the owner and repo and load what's published.</p>
         <div class="grid">
           <label class="field">GitHub owner<input id="owner" type="text" placeholder="YourGitHubUser" autocomplete="off" list="dl-owners"></label>
           <label class="field">GitHub repo<input id="repo" type="text" placeholder="YourRepo" autocomplete="off" list="dl-repos"></label>
@@ -218,10 +229,11 @@ $("docs-link").href = `https://github.com/${INDEX.owner}/${INDEX.repo}/blob/${IN
 
 const blankArtifact = () => ({ targets: [], download_url: "", sha256: "", library_dependencies: [] });
 const blankLibrary = () => ({ name: "", download_url: "", sha256: "", filename: "" });
-let state = {
+const blankState = () => ({
   owner: "", repo: "", version: "", name: "", author: "", description: "",
   parity: true, scenes: [], dependencies: [], screenshots: [], artifacts: [blankArtifact()],
-};
+});
+let state = blankState();
 let indexMods = null;    // repository.json's "mods", once fetched
 
 const vkey = (v) => v.split(".").map(Number);
@@ -517,6 +529,77 @@ async function fetchIndex() {
     render();
   } catch {}
 }
+
+// -- start from a release ------------------------------------------------------------
+const RELEASE_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/(?:tag\/([^/?#]+)|download\/([^/]+)\/([^/?#]+))/i;
+const BUILD_RE = /\.(dll|zip)$/i;
+const assetSha = (a) => (/^sha256:([0-9a-f]{64})$/.exec(a?.digest || "") || [])[1] || "";
+
+async function gh(path) {
+  const r = await fetch(`https://api.github.com/${path}`, { headers: { Accept: "application/vnd.github+json" } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(r.status === 403 || r.status === 429 ? "GitHub's hourly limit for this network is used up; try again later" : `GitHub answered ${r.status}`);
+  return r.json();
+}
+
+async function fillFromRelease() {
+  const status = $("release-status"), link = $("release-url").value.trim();
+  const m = RELEASE_RE.exec(link);
+  if (!m) { status.textContent = "That isn't a GitHub release link: …/releases/tag/<tag> or …/releases/download/<tag>/<file>."; return; }
+  let [, owner, repo] = m;
+  const tag = decodeURIComponent(m[3] || m[4]), picked = m[5] && decodeURIComponent(m[5]);
+  const version = (tag.match(/\d+\.\d+\.\d+/) || [""])[0];
+  status.textContent = "Reading the release…";
+  let release, info;
+  try {
+    release = await gh(`repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+    if (!release) { status.textContent = `${owner}/${repo} has no release tagged ${tag}.`; return; }
+    info = await gh(`repos/${owner}/${repo}`);
+  } catch (e) { status.textContent = "Couldn't read the release: " + e.message; return; }
+  if (info) [owner, repo] = info.full_name.split("/");   // GitHub's own capitalisation
+  const assets = (release.assets || []).filter(a => BUILD_RE.test(a.name));
+
+  const listed = Object.keys(indexMods || {}).find(k => k.toLowerCase() === `${owner}.${repo}`.toLowerCase());
+  let base = null;
+  if (listed) {
+    const [o, r] = listed.split(/\.(.*)/s);
+    try { const res = await fetch(`${RAW}/manifests/${o}/${r}/latest.json`, { cache: "no-store" }); if (res.ok) base = await res.json(); } catch {}
+  }
+  const used = new Set();
+  if (base) {
+    loadManifest(base);
+    // Each build keeps its file name, with the old version swapped for the new one.
+    for (const a of state.artifacts) {
+      const want = basename(a.download_url).split(base.version).join(version || base.version);
+      const asset = assets.find(x => x.name === want && !used.has(x));
+      if (asset) used.add(asset);
+      a.download_url = asset ? asset.browser_download_url : "";
+      a.sha256 = asset ? assetSha(asset) : "";
+    }
+    const pick = picked && assets.find(x => x.name === picked);
+    const empty = state.artifacts.find(a => !a.download_url);
+    if (pick && !used.has(pick) && empty) { empty.download_url = pick.browser_download_url; empty.sha256 = assetSha(pick); used.add(pick); }
+  } else {
+    const chosen = picked ? assets.filter(x => x.name === picked) : assets.slice(0, TARGETS.length);
+    state = { ...blankState(), owner, repo, name: repo, description: info?.description || "",
+      artifacts: chosen.length ? chosen.map(x => ({ ...blankArtifact(), download_url: x.browser_download_url, sha256: assetSha(x) })) : [blankArtifact()] };
+    chosen.forEach(x => used.add(x));
+  }
+  state.version = version;
+  render();
+
+  const notes = [];
+  notes.push(base ? `Started from the published ${base.version}.` : `New mod: ${used.size} build${used.size === 1 ? "" : "s"} from ${tag}; tick each one's targets.`);
+  if (!version) notes.push(`The tag ${tag} has no MAJOR.MINOR.PATCH version; enter it below.`);
+  const missing = state.artifacts.filter(a => !a.download_url).length;
+  if (missing) notes.push(`${missing} build${missing === 1 ? "" : "s"} had no matching file in ${tag}; paste the link and hash it.`);
+  const unhashed = state.artifacts.filter(a => a.download_url && !a.sha256).length;
+  if (unhashed) notes.push(`GitHub gave no hash for ${unhashed} file${unhashed === 1 ? "" : "s"}; hash it below.`);
+  if (base && state.artifacts.some(a => a.library_dependencies.length)) notes.push("Libraries are kept as published; update them if they changed.");
+  status.textContent = notes.join(" ");
+}
+$("from-release").addEventListener("click", fillFromRelease);
+$("release-url").addEventListener("keydown", (e) => { if (e.key === "Enter") fillFromRelease(); });
 
 $("load-published").addEventListener("click", async () => {
   const status = $("load-status");
