@@ -145,10 +145,10 @@
       <section>
         <h2>Joining a server</h2>
         <div class="checks" role="radiogroup">
-          <label><input type="radio" name="parity" value="true" checked> Players need this exact version to join a server running it</label>
-          <label><input type="radio" name="parity" value="false"> Optional: clients and servers can run different versions, or none</label>
+          <label><input type="radio" name="parity" value="true" checked> Players must have this mod, at the server's exact version, to join a server running it</label>
+          <label><input type="radio" name="parity" value="false"> Optional: players can join without it, or with a different version</label>
         </div>
-        <p class="hint">If unsure, keep the first: <code>parity_required: true</code>.</p>
+        <p class="hint">Separate client and server builds from one release are still one version, so they don't change this. If unsure, keep the first: <code>parity_required: true</code>.</p>
       </section>
 
       <section>

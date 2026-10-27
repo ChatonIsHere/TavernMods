@@ -21,7 +21,7 @@ Every launcher trusts this repo by default, so a mod gets in only after automate
 4. Open a pull request that adds only `submissions/<owner>.<repo>/<version>.json`. Only maintainers can add files here directly, so fork this repo first. The builder's **Add to your fork** button then opens the file in your fork, ready to commit to a new branch and propose as a pull request. The checks post their result as a comment and re-run on every push. If you change a build, update its hash.
 5. A maintainer reviews and merges. Your manifest then moves to `manifests/<owner>/<repo>/<version>.json`, and the `latest*.json` pointers and `repository.json` are rebuilt.
 
-Set `parity_required` to `false` only if clients and servers can run different versions of your mod; if unsure, keep `true`. Set `scenes` only if your mod breaks in some scene.
+`parity_required` says whether a player must have your mod, at the server's exact version, to join a server running it. Keep `true` if so, or if unsure. Set `false` if players can join without it or with another version. Separate client and server files from one release are still one version, so they don't change this. Set `scenes` only if your mod breaks in some scene.
 
 ## Updating
 

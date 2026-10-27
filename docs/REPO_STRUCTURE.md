@@ -104,7 +104,7 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | `author` | Defaults to the text before the first dot in `id`. |
 | `description` | Free text. |
 | `screenshots` | Optional list of image URLs for this repo's page. Installers ignore it. |
-| `parity_required` | Required boolean. Readers refuse a missing or non-boolean value. See [Joining a server](#joining-a-server). |
+| `parity_required` | Required boolean: whether a player needs this mod, at the server's exact version, to join a server running it. It compares versions, not files, so separate client and server artifacts don't affect it. Readers refuse a missing or non-boolean value. See [Joining a server](#joining-a-server). |
 | `scenes` | Optional non-empty list of distinct scenes the mod works in, out of `normal`, `quest`, `tutorial`. Absent or `null` means all; listing all three is rejected. |
 | `dependencies` | Always present. `{}` or `{"<mod id>": "<minimum version>"}`. |
 | `artifacts` | Required, non-empty. One entry per build. |
