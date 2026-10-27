@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/CustomDistributionAPI/releases/download/v3/CustomDistributionAPI.dll",
       "sha256": "29cfc8afb342a4af883e542ac332f8bb07c557e35202bcdcb13ce935a28d9470",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

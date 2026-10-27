@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/MrDuckTheFifth/SyncLib/releases/download/1.0.4/SyncLib.dll",
       "sha256": "3aa9f2817f12fcaa3c75554340e912b75b0d5cd4ee7de5c0c0a69cadac347044",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

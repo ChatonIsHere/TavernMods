@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/Circl-NoE/ATTMateriaLib/releases/download/v1.4.0/MateriaLib.dll",
       "sha256": "eda423fc68f711218f855b196a7a34489d447c3f7386dc34c52208a87f366ce3",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

@@ -20,6 +20,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/CGNiksCustomMaterialVariants/releases/download/v7/CGNiksCustomMaterialVariants.dll",
       "sha256": "9f2d87f2b1855bfceb0a74fb96ff13adee09409d460ff3237fdba30c11100a88",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

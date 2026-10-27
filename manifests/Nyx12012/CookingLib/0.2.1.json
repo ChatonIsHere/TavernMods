@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/Nyx12012/CookingLib/releases/download/V0.2.1/CookingLib.dll",
       "sha256": "2281d57a1cb5c79e5d89d4f62d11eb1b6159cbe0c1db29f0074c4f113233fb31",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

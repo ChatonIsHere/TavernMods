@@ -17,6 +17,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/DyeingAPI/releases/download/v8/DyeingAPI.dll",
       "sha256": "15ffcb388c70eff1555ebda86f9a26d48a8c50424e669da206097dd927b2533d",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

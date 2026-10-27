@@ -1,0 +1,24 @@
+{
+  "manifest_version": 2,
+  "id": "CG-Nik.MaterialDistributionAPI",
+  "name": "MaterialDistributionAPI",
+  "version": "2.0.0",
+  "author": "CG-Nik",
+  "description": "An API/patch mod for A Township Tale that adds material distributions for some things that don't have them.",
+  "parity_required": true,
+  "dependencies": {
+    "CG-Nik.CustomDistributionAPI": "3.0.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/CG-Nik/MaterialDistributionAPI/releases/download/v2/MaterialDistributionAPI.dll",
+      "sha256": "33345fa1fc261362e77785506d1420b05607269962bd52c3410391c52f92b491",
+      "package": "dll",
+      "library_dependencies": []
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "manifest_version": 2,
+  "id": "CG-Nik.CGNiksCustomMaterialVariants",
+  "name": "CGNiksCustomMaterialVariants",
+  "version": "7.0.0",
+  "author": "CG-Nik",
+  "description": "A content mod for A Township Tale that adds new variants for materials.",
+  "parity_required": true,
+  "dependencies": {
+    "Circl-NoE.ATTMateriaLib": "1.4.0",
+    "CG-Nik.MaterialDistributionAPI": "2.0.0",
+    "CG-Nik.DyeingAPI": "8.0.0",
+    "CG-Nik.CustomDistributionAPI": "3.0.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/CG-Nik/CGNiksCustomMaterialVariants/releases/download/v7/CGNiksCustomMaterialVariants.dll",
+      "sha256": "9f2d87f2b1855bfceb0a74fb96ff13adee09409d460ff3237fdba30c11100a88",
+      "package": "dll",
+      "library_dependencies": []
+    }
+  ]
+}

@@ -16,6 +16,7 @@
       ],
       "download_url": "https://github.com/calebv2/Portal-Gun/releases/download/v0.2.5/PortalGun-Client.dll",
       "sha256": "ddaf4fe118eba2dda4ba5329002af8306ad716264b106b0c403e8e2dc93ef271",
+      "package": "dll",
       "library_dependencies": []
     },
     {
@@ -24,6 +25,7 @@
       ],
       "download_url": "https://github.com/calebv2/Portal-Gun/releases/download/v0.2.5/PortalGun-Server.dll",
       "sha256": "e5615cf74743267da980f7ac45c7f23ae1d27366cd2faf1566ac8f2533ccd760",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

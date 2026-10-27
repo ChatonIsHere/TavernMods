@@ -17,6 +17,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/MaterialDistributionAPI/releases/download/v2/MaterialDistributionAPI.dll",
       "sha256": "33345fa1fc261362e77785506d1420b05607269962bd52c3410391c52f92b491",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
