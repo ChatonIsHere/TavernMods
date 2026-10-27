@@ -46,10 +46,10 @@
   .lede { margin: 0; font-size: .82rem; }
   .lede code { font: .78rem var(--mono); color: var(--accent); }
   .lede a { color: var(--primary); }
-  .controls { display: flex; gap: .5rem; align-items: center; }
+  .controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; max-width: 100%; }
 
   .input {
-    width: 17rem; padding: .35rem .6rem;
+    width: 17rem; max-width: 100%; padding: .35rem .6rem;
     background: var(--card); border: 1px solid var(--border);
     border-radius: calc(var(--radius) - 2px);
     color: var(--foreground); font: inherit;
@@ -129,6 +129,69 @@
   td .badges { flex-wrap: nowrap; }
 
   .note { color: var(--muted-foreground); padding: 1.5rem 0; }
+
+  .graph-wrap {
+    position: relative; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .graph-wrap svg {
+    display: block; width: 100%; height: min(72vh, 46rem); min-height: 22rem;
+    touch-action: none; user-select: none; cursor: grab;
+  }
+  .graph-wrap svg.panning { cursor: grabbing; }
+  .graph-tools { position: absolute; left: .5rem; top: .5rem; }
+  .graph-tools button, .graph-info .close {
+    padding: .2rem .55rem; cursor: pointer; font: inherit; font-size: .74rem;
+    background: var(--background); color: var(--muted-foreground);
+    border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px);
+  }
+  .graph-tools button:hover, .graph-info .close:hover { color: var(--foreground); }
+  .graph-help {
+    position: absolute; left: .6rem; bottom: .4rem; right: .6rem;
+    font-size: .72rem; color: var(--muted-foreground); pointer-events: none;
+  }
+  .edge { stroke: var(--muted-foreground); stroke-opacity: .45; stroke-width: 1.4; }
+  .edge.hot { stroke: var(--primary); stroke-opacity: 1; stroke-width: 2; }
+  .arrow { fill: var(--muted-foreground); fill-opacity: .7; }
+  .arrow.hot { fill: var(--primary); fill-opacity: 1; }
+  .node { cursor: pointer; }
+  .node circle { fill: var(--muted); stroke: var(--primary); stroke-width: 1.6; }
+  .node.external circle { fill: var(--background); stroke: var(--muted-foreground); stroke-dasharray: 3 2; }
+  .node.hot circle { fill: var(--primary-dim); }
+  .node.selected circle { fill: var(--primary); }
+  .node:focus { outline: none; }
+  .node:focus-visible circle { stroke: var(--foreground); stroke-width: 2.5; }
+  .node text {
+    fill: var(--foreground); font-size: 11px; text-anchor: middle; pointer-events: none;
+    paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round;
+  }
+  .node.external text { fill: var(--muted-foreground); }
+  .dim { opacity: .15; }
+  .graph-info {
+    display: none; position: absolute; top: .5rem; right: .5rem; width: 17rem; max-width: calc(100% - 1rem);
+    max-height: calc(100% - 1rem); overflow: auto;
+    padding: .6rem .7rem; font-size: .78rem;
+    background: var(--background); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .graph-info.open { display: block; }
+  .graph-info .close { float: right; margin-left: .4rem; }
+  .graph-info h3 { font: 700 .95rem/1.25 var(--serif); margin: 0 0 .15rem; }
+  .graph-info p { margin: .35rem 0; }
+  .graph-info .k {
+    margin-top: .5rem; color: var(--muted-foreground);
+    font-size: .68rem; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .graph-info ul { margin: .15rem 0 0; padding-left: 1.1rem; }
+  .graph-info li button {
+    padding: 0; border: 0; background: none; cursor: pointer;
+    color: var(--primary); font: inherit; text-align: left;
+  }
+  .graph-info li button:hover { text-decoration: underline; }
+  .graph-info .min { color: var(--muted-foreground); font-family: var(--mono); font-size: .72rem; }
+  @media (max-width: 640px) {
+    .graph-info { position: static; width: auto; max-width: none; max-height: none; margin: 0 .5rem .5rem; }
+    .graph-help { position: static; padding: 0 .6rem .4rem; }
+  }
 </style>
 </head>
 <body>
@@ -147,6 +210,7 @@
       <div class="segmented" role="group" aria-label="View">
         <button id="v-cards" type="button">Cards</button>
         <button id="v-table" type="button">Table</button>
+        <button id="v-graph" type="button">Graph</button>
       </div>
     </div>
   </header>
@@ -251,6 +315,326 @@ const table = (list) => {
   return node;
 };
 
+// -- graph view ------------------------------------------------------------------
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svgPut = (parent, tag, attrs = {}) => {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  parent.append(node);
+  return node;
+};
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Built once, so the layout survives searching and switching views.
+let graph = null;
+
+const buildGraph = () => {
+  const nodes = MODS.map(m => ({ id: m.id, mod: m, label: text(m.name) }));
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const edges = [];
+  for (const m of MODS) {
+    for (const [dep, min] of Object.entries(m.dependencies || {})) {
+      if (!byId.has(dep)) {
+        const n = { id: dep, mod: null, label: dep };
+        nodes.push(n);
+        byId.set(dep, n);
+      }
+      edges.push({ from: byId.get(m.id), to: byId.get(dep), min: text(min) });
+    }
+  }
+  nodes.forEach((n, i) => {
+    n.needs = edges.filter(e => e.from === n);
+    n.neededBy = edges.filter(e => e.to === n);
+    n.r = 7 + 2.2 * Math.sqrt(n.neededBy.length);
+    const a = (i / nodes.length) * 2 * Math.PI;
+    n.x = Math.cos(a) * 160; n.y = Math.sin(a) * 160; n.vx = 0; n.vy = 0;
+  });
+
+  const wrap = document.createElement("div");
+  wrap.className = "graph-wrap";
+  const svg = svgPut(wrap, "svg", { role: "img", "aria-label": "Mods and the mods they need" });
+  const defs = svgPut(svg, "defs");
+  for (const [id, cls] of [["arrow", "arrow"], ["arrow-hot", "arrow hot"]]) {
+    const marker = svgPut(defs, "marker", { id, viewBox: "0 0 10 10", refX: 10, refY: 5,
+      markerWidth: 9, markerHeight: 9, orient: "auto", markerUnits: "userSpaceOnUse" });
+    svgPut(marker, "path", { d: "M0,0 L10,5 L0,10 z", class: cls });
+  }
+  const viewport = svgPut(svg, "g");
+  const edgeLayer = svgPut(viewport, "g");
+  const nodeLayer = svgPut(viewport, "g");
+  for (const e of edges) {
+    e.line = svgPut(edgeLayer, "line", { class: "edge", "marker-end": "url(#arrow)" });
+    svgPut(e.line, "title").textContent = `${e.from.label} needs ${e.to.label} ${e.min} or later`;
+  }
+  for (const n of nodes) {
+    n.g = svgPut(nodeLayer, "g", { class: n.mod ? "node" : "node external", tabindex: 0,
+      "aria-label": n.mod ? n.label : `${n.label}, not in this index` });
+    svgPut(n.g, "circle", { r: n.r });
+    svgPut(n.g, "text", { y: n.r + 13 }).textContent = n.label;
+  }
+
+  const tools = document.createElement("div");
+  tools.className = "graph-tools";
+  const fitButton = put(tools, "button", null, "Fit");
+  fitButton.type = "button";
+  wrap.append(tools);
+  const info = put(wrap, "div", "graph-info");
+  put(wrap, "div", "graph-help",
+    "Arrows point to what a mod needs. Drag a mod to move it, drag the background to pan, scroll or pinch to zoom, click a mod for details.");
+
+  // A small force layout: every pair repels, each link pulls toward a set
+  // length, and a weak pull keeps loose mods near the middle.
+  let alpha = 0, frame = 0, k = 1, tx = 0, ty = 0, fitted = false, viewMoved = false;
+  const tick = () => {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+        const d = Math.sqrt(d2), f = (5000 * alpha) / d2;
+        a.vx -= (dx / d) * f; a.vy -= (dy / d) * f;
+        b.vx += (dx / d) * f; b.vy += (dy / d) * f;
+      }
+    }
+    for (const e of edges) {
+      const dx = e.to.x - e.from.x, dy = e.to.y - e.from.y, d = Math.hypot(dx, dy) || 1;
+      const f = ((d - 150) / d) * 0.08 * alpha;
+      e.from.vx += dx * f; e.from.vy += dy * f;
+      e.to.vx -= dx * f; e.to.vy -= dy * f;
+    }
+    for (const n of nodes) {
+      if (n.fixed) { n.vx = n.vy = 0; continue; }
+      n.vx = (n.vx - n.x * 0.012 * alpha) * 0.6;
+      n.vy = (n.vy - n.y * 0.012 * alpha) * 0.6;
+      n.x += n.vx; n.y += n.vy;
+    }
+  };
+  const draw = () => {
+    viewport.setAttribute("transform", `translate(${tx},${ty}) scale(${k})`);
+    for (const e of edges) {
+      const dx = e.to.x - e.from.x, dy = e.to.y - e.from.y, d = Math.hypot(dx, dy) || 1;
+      e.line.setAttribute("x1", e.from.x + (dx / d) * e.from.r);
+      e.line.setAttribute("y1", e.from.y + (dy / d) * e.from.r);
+      e.line.setAttribute("x2", e.to.x - (dx / d) * (e.to.r + 2));
+      e.line.setAttribute("y2", e.to.y - (dy / d) * (e.to.r + 2));
+    }
+    for (const n of nodes) n.g.setAttribute("transform", `translate(${n.x},${n.y})`);
+  };
+  const step = () => {
+    tick(); draw();
+    alpha *= 0.97;
+    frame = alpha > 0.005 ? requestAnimationFrame(step) : 0;
+  };
+  const heat = (to) => {
+    if (reducedMotion) return;
+    alpha = Math.max(alpha, to);
+    if (!frame) frame = requestAnimationFrame(step);
+  };
+  // Settle before the first paint, so the graph opens still.
+  alpha = 1;
+  while (alpha > 0.005) { tick(); alpha *= 0.985; }
+  alpha = 0;
+
+  const fit = () => {
+    const w = svg.clientWidth, h = svg.clientHeight - 24;
+    if (!w || h <= 0) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of nodes) {
+      x0 = Math.min(x0, n.x - n.r - 60); x1 = Math.max(x1, n.x + n.r + 60);
+      y0 = Math.min(y0, n.y - n.r - 12); y1 = Math.max(y1, n.y + n.r + 24);
+    }
+    k = Math.max(0.25, Math.min(1.6, w / (x1 - x0), h / (y1 - y0)));
+    tx = w / 2 - ((x0 + x1) / 2) * k;
+    ty = h / 2 - ((y0 + y1) / 2) * k;
+    fitted = true;
+    viewMoved = false;
+    draw();
+  };
+  fitButton.addEventListener("click", fit);
+
+  // The focused mod lights up its whole chain: what it needs, and what needs it.
+  let hover = null, selected = null, query = "";
+  const closure = (start, next) => {
+    const seen = new Set(), todo = [start];
+    while (todo.length) {
+      for (const m of next(todo.pop())) {
+        if (m !== start && !seen.has(m)) { seen.add(m); todo.push(m); }
+      }
+    }
+    return seen;
+  };
+  const matches = (n) => !query || `${n.id} ${n.label} ${text(n.mod?.author)}`.toLowerCase().includes(query);
+  const paint = () => {
+    const focus = hover || selected;
+    let lit, hot = () => false;
+    if (focus) {
+      const up = closure(focus, (n) => n.needs.map(e => e.to));
+      const down = closure(focus, (n) => n.neededBy.map(e => e.from));
+      lit = new Set([focus, ...up, ...down]);
+      hot = (e) => ((e.from === focus || up.has(e.from)) && up.has(e.to))
+                || ((e.to === focus || down.has(e.to)) && down.has(e.from));
+    } else {
+      lit = new Set(nodes.filter(matches));
+    }
+    for (const n of nodes) {
+      n.g.classList.toggle("dim", !lit.has(n));
+      n.g.classList.toggle("hot", !!focus && n !== focus && lit.has(n));
+      n.g.classList.toggle("selected", n === selected);
+    }
+    for (const e of edges) {
+      const on = hot(e);
+      e.line.classList.toggle("hot", on);
+      e.line.setAttribute("marker-end", on ? "url(#arrow-hot)" : "url(#arrow)");
+      e.line.classList.toggle("dim", focus ? !on : !(lit.has(e.from) || lit.has(e.to)));
+    }
+  };
+
+  const listOf = (title, items) => {
+    if (!items.length) return;
+    put(info, "div", "k", title);
+    const ul = put(info, "ul");
+    for (const [n, min] of items) {
+      const li = put(ul, "li");
+      const b = put(li, "button", null, n.label);
+      b.type = "button";
+      b.addEventListener("click", () => select(n));
+      if (min) { li.append(" "); put(li, "span", "min", `${min} or later`); }
+    }
+  };
+  const select = (n) => {
+    selected = n;
+    info.replaceChildren();
+    info.classList.toggle("open", !!n);
+    if (n) {
+      const close = put(info, "button", "close", "×");
+      close.type = "button";
+      close.title = "Close";
+      close.addEventListener("click", () => select(null));
+      if (n.mod) {
+        link(put(info, "h3"), repoUrl(n.mod), n.label).title = "Source on GitHub";
+        const meta = put(info, "div", "card-meta");
+        meta.append("by ");
+        link(meta, ownerUrl(n.mod), n.mod.author);
+        const badges = put(info, "div", "badges");
+        badges.style.marginTop = ".35rem";
+        put(badges, "span", "badge version", n.mod.latest);
+        tags(badges, n.mod);
+        put(info, "p", null, n.mod.description);
+      } else {
+        put(info, "h3", null, n.label);
+        put(info, "p", null, "Not in this index. Mods that need it install only once a source that has it is added.");
+      }
+      listOf("Needs", n.needs.map(e => [e.to, e.min]));
+      listOf("Needed by", n.neededBy.map(e => [e.from, ""]));
+    }
+    paint();
+  };
+
+  // Drag a mod to move it, drag the background to pan, wheel to zoom.
+  const nodeAt = (target) => {
+    const g = target.closest?.(".node");
+    return g ? nodes.find(n => n.g === g) : null;
+  };
+  const toWorld = (ev) => {
+    const box = svg.getBoundingClientRect();
+    return [(ev.clientX - box.left - tx) / k, (ev.clientY - box.top - ty) / k];
+  };
+  // Zoom to `next`, keeping the world point under (sx, sy) on screen still.
+  const zoomAt = (next, sx, sy, from = { k, tx, ty }) => {
+    next = Math.max(0.25, Math.min(3, next));
+    tx = sx - ((sx - from.tx) * next) / from.k;
+    ty = sy - ((sy - from.ty) * next) / from.k;
+    k = next;
+    viewMoved = true;
+    draw();
+  };
+  const local = (p) => {
+    const box = svg.getBoundingClientRect();
+    return [p.x - box.left, p.y - box.top];
+  };
+  const pointers = new Map();
+  let drag = null, pinch = null;
+  svg.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    svg.setPointerCapture(ev.pointerId);
+    if (pointers.size === 2) {
+      // A second finger turns the gesture into a pinch.
+      if (drag?.n) drag.n.fixed = false;
+      drag = null;
+      const [a, b] = [...pointers.values()];
+      const [mx, my] = local({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx, my, from: { k, tx, ty } };
+      return;
+    }
+    const n = nodeAt(ev.target);
+    drag = { n, sx: ev.clientX, sy: ev.clientY, tx, ty, moved: false };
+    if (n) n.fixed = true; else svg.classList.add("panning");
+  });
+  svg.addEventListener("pointermove", (ev) => {
+    if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pinch && pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const [mx, my] = local({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      const scale = Math.hypot(a.x - b.x, a.y - b.y) / pinch.d;
+      zoomAt(pinch.from.k * scale, pinch.mx, pinch.my, pinch.from);
+      tx += mx - pinch.mx;
+      ty += my - pinch.my;
+      draw();
+      return;
+    }
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) <= 3) return;
+    drag.moved = true;
+    if (drag.n) {
+      [drag.n.x, drag.n.y] = toWorld(ev);
+      draw();
+      heat(0.3);
+    } else {
+      tx = drag.tx + ev.clientX - drag.sx;
+      ty = drag.ty + ev.clientY - drag.sy;
+      viewMoved = true;
+      draw();
+    }
+  });
+  const release = (ev) => {
+    pointers.delete(ev.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (!drag) return;
+    if (drag.n) drag.n.fixed = false;
+    if (!drag.moved) select(drag.n && drag.n !== selected ? drag.n : null);
+    svg.classList.remove("panning");
+    drag = null;
+  };
+  svg.addEventListener("pointerup", release);
+  svg.addEventListener("pointercancel", release);
+  svg.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const [sx, sy] = local({ x: ev.clientX, y: ev.clientY });
+    zoomAt(k * Math.exp(-ev.deltaY * 0.0015), sx, sy);
+  }, { passive: false });
+  // Follow the page's size until the reader moves the view themselves.
+  new ResizeObserver(() => { if (fitted && !viewMoved) fit(); }).observe(svg);
+  svg.addEventListener("pointerover", (ev) => { hover = nodeAt(ev.target); paint(); });
+  svg.addEventListener("pointerleave", () => { hover = null; paint(); });
+  svg.addEventListener("keydown", (ev) => {
+    const n = nodeAt(ev.target);
+    if (n && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); select(n); }
+    else if (ev.key === "Escape") select(null);
+  });
+
+  return {
+    wrap, edges,
+    // Searching dims the mods that don't match instead of removing them.
+    show(q) {
+      query = q;
+      if (!fitted) fit();
+      paint();
+      return nodes.filter(n => n.mod && matches(n)).length;
+    },
+  };
+};
+
 let view = "cards";
 try { view = localStorage.getItem("view") || "cards"; } catch {}
 
@@ -261,6 +645,16 @@ const render = () => {
     : MODS;
   el("v-cards").setAttribute("aria-pressed", view === "cards");
   el("v-table").setAttribute("aria-pressed", view === "table");
+  el("v-graph").setAttribute("aria-pressed", view === "graph");
+  if (view === "graph" && MODS.length) {
+    graph ??= buildGraph();
+    el("view").replaceChildren(graph.wrap);
+    const lit = graph.show(q);
+    const links = graph.edges.length;
+    el("count").textContent = `${lit} of ${MODS.length} mod${MODS.length === 1 ? "" : "s"}, ${links} dependency link${links === 1 ? "" : "s"}`;
+    el("note").textContent = lit === 0 ? "Nothing here matches that." : "";
+    return;
+  }
   if (view === "table") {
     el("view").replaceChildren(table(shown));
   } else {
@@ -282,6 +676,7 @@ const setView = (next) => {
 };
 el("v-cards").addEventListener("click", () => setView("cards"));
 el("v-table").addEventListener("click", () => setView("table"));
+el("v-graph").addEventListener("click", () => setView("graph"));
 el("q").addEventListener("input", render);
 render();
 </script>
