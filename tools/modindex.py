@@ -1079,6 +1079,7 @@ def cmd_site(args):
         m = mods[mod_id][latest]
         rows.append({"id": mod_id, **_display(m), "targets": manifest_targets(m),
                      "parity_required": parity_required(m), "latest": latest,
+                     "dependencies": m.get("dependencies") or {},
                      "screenshots": _screenshots_for(m)})
     rows.sort(key=lambda r: r["name"].lower())
 
