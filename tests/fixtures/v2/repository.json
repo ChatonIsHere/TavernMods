@@ -1,0 +1,54 @@
+{
+  "index_version": 2,
+  "mods": {
+    "ExampleDev.ExampleMod": {
+      "1": {
+        "name": "Example Mod",
+        "author": "ExampleDev",
+        "description": "Ünïcödé ✓ check",
+        "parity_required": true,
+        "targets": [
+          "client_android",
+          "client_windows",
+          "server"
+        ],
+        "scenes": [
+          "normal",
+          "quest"
+        ],
+        "versions": [
+          "1.2.0"
+        ]
+      }
+    },
+    "ExampleDev.PcHelper": {
+      "1": {
+        "name": "PC Helper",
+        "author": "ExampleDev",
+        "description": "Windows client only",
+        "parity_required": false,
+        "targets": [
+          "client_windows"
+        ],
+        "versions": [
+          "1.0.0"
+        ]
+      }
+    },
+    "ExampleDev.SplitMod": {
+      "1": {
+        "name": "Split Mod",
+        "author": "ExampleDev",
+        "description": "different client and server builds",
+        "parity_required": true,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "1.0.0"
+        ]
+      }
+    }
+  }
+}

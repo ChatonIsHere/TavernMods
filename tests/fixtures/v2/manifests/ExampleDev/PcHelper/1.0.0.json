@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "ExampleDev.PcHelper",
+  "name": "PC Helper",
+  "version": "1.0.0",
+  "author": "ExampleDev",
+  "description": "Windows client only",
+  "parity_required": false,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows"
+      ],
+      "download_url": "http://127.0.0.1:8765/files/PcHelper.dll",
+      "sha256": "58e55f1de3130db8fe3b51d479d46c3689cd2a6fd94ef0bde35b7e3a3d92e809",
+      "package": "dll",
+      "library_dependencies": []
+    }
+  ]
+}
