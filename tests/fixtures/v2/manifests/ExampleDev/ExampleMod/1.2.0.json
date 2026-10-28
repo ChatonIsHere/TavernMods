@@ -1,0 +1,44 @@
+{
+  "manifest_version": 2,
+  "id": "ExampleDev.ExampleMod",
+  "name": "Example Mod",
+  "version": "1.2.0",
+  "author": "ExampleDev",
+  "description": "Ünïcödé ✓ check",
+  "parity_required": true,
+  "scenes": [
+    "normal",
+    "quest"
+  ],
+  "dependencies": {
+    "ExampleDev.PcHelper": "1.0.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "http://127.0.0.1:8765/files/ExampleMod.dll",
+      "sha256": "973791f255d3537f91fa6d28000ae38404ae18c055ecd34353fd73790c7b5dc9",
+      "package": "dll",
+      "library_dependencies": [
+        {
+          "name": "ExampleLib",
+          "download_url": "http://127.0.0.1:8765/files/ExampleLib.dll",
+          "sha256": "81cb77b745ac23d7eb73736fd7019d5a563be16d0b31a72304cd327958b549f6",
+          "filename": "ExampleLib.dll"
+        }
+      ]
+    },
+    {
+      "targets": [
+        "client_android"
+      ],
+      "download_url": "http://127.0.0.1:8765/files/ExampleMod-quest.zip",
+      "sha256": "53c5b66a1de9cf1b81682a3efac5b29cb652d17a9ced570dd6ee923b91bdd3c6",
+      "package": "zip",
+      "library_dependencies": []
+    }
+  ]
+}

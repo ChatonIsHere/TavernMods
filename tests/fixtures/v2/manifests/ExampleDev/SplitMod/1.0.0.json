@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "id": "ExampleDev.SplitMod",
+  "name": "Split Mod",
+  "version": "1.0.0",
+  "author": "ExampleDev",
+  "description": "different client and server builds",
+  "parity_required": true,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "server"
+      ],
+      "download_url": "http://127.0.0.1:8765/files/SplitMod-server.zip",
+      "sha256": "12ca0d504ef57f3f75ca870727c4992f091338f662dfb31b79ecb0e82e67c0ad",
+      "package": "zip",
+      "library_dependencies": []
+    },
+    {
+      "targets": [
+        "client_windows"
+      ],
+      "download_url": "http://127.0.0.1:8765/files/SplitMod-pc.dll",
+      "sha256": "ef3a4c44d89fa2bf1c8dceb5cad500586283d6c2217533b5503deed210a41525",
+      "package": "dll",
+      "library_dependencies": []
+    }
+  ]
+}
