@@ -61,6 +61,20 @@
         ]
       }
     },
+    "ChatonIsHere.Canary": {
+      "0": {
+        "name": "Canary",
+        "author": "ChatonIsHere",
+        "description": "Records what a server is doing, so there's something to look at when it lags, errors or crashes: lag spikes, errors by mod, players, entities and resource use, with a browser viewer.",
+        "parity_required": false,
+        "targets": [
+          "server"
+        ],
+        "versions": [
+          "0.3.0"
+        ]
+      }
+    },
     "Circl-NoE.ATTMateriaLib": {
       "1": {
         "name": "MateriaLib",
@@ -118,6 +132,36 @@
         ],
         "versions": [
           "0.14.0"
+        ]
+      }
+    },
+    "TheRavenSeb.More-Hydrated": {
+      "1": {
+        "name": "More Hydrated",
+        "author": "TheRavenSeb",
+        "description": "Adds drinks for Hydrate or Dierate, infused in a cooking pot: boiled water, blueberry tea, coffee, bone broth and an energy drink.",
+        "parity_required": false,
+        "targets": [
+          "server"
+        ],
+        "versions": [
+          "1.0.0"
+        ]
+      }
+    },
+    "TheRavenSeb.hydrateordiedrate": {
+      "1": {
+        "name": "Hydrate or Dierate",
+        "author": "TheRavenSeb",
+        "description": "Adds thirst: a thirst bar that empties over time, and a slow loss of health when it runs out. Other mods can set how much their liquids quench it.",
+        "parity_required": false,
+        "targets": [
+          "client_android",
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "1.0.3"
         ]
       }
     },

@@ -17,6 +17,7 @@
       ],
       "download_url": "https://github.com/TheRavenSeb/More-Hydrated/releases/download/1.0.0/MoreHydrated.dll",
       "sha256": "612e3c09902b3e8f6e6a4f3b510641b11b99b445b69f2397b7edbe6b053f8aaa",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

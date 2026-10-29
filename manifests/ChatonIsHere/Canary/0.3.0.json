@@ -14,6 +14,7 @@
       ],
       "download_url": "https://github.com/ChatonIsHere/Canary/releases/download/v0.3.0/Canary.dll",
       "sha256": "8564f44b52c05c7ae3e67760f59c72d3fafa338c0ce8aa654a91d8ba7e32c2a1",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
