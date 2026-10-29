@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "id": "TheRavenSeb.hydrateordiedrate",
+  "name": "Hydrate or Dierate",
+  "version": "1.0.3",
+  "author": "TheRavenSeb",
+  "description": "Adds thirst: a thirst bar that empties over time, and a slow loss of health when it runs out. Other mods can set how much their liquids quench it.",
+  "parity_required": false,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/TheRavenSeb/hydrateordiedrate/releases/download/1.0.3/Hydrateordierate.dll",
+      "sha256": "c8851dd2f2494b46caac974a8eedf3e0d8a47dfe16bcac15d4ca73b126b71547",
+      "library_dependencies": []
+    },
+    {
+      "targets": [
+        "client_android"
+      ],
+      "download_url": "https://github.com/TheRavenSeb/hydrateordiedrate/releases/download/1.0.3/HydrateOrDiedrate_quest.dll",
+      "sha256": "1c30825bc5eb6368bc4549aa0c2f94f36d563dd2e3220e8915a93220190735be",
+      "library_dependencies": []
+    }
+  ]
+}

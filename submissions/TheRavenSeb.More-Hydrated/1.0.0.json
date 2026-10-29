@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "id": "TheRavenSeb.More-Hydrated",
+  "name": "More Hydrated",
+  "version": "1.0.0",
+  "author": "TheRavenSeb",
+  "description": "Adds drinks for Hydrate or Dierate, infused in a cooking pot: boiled water, blueberry tea, coffee, bone broth and an energy drink.",
+  "parity_required": false,
+  "dependencies": {
+    "Nyx12012.CookingLib": "0.2.1",
+    "TheRavenSeb.hydrateordiedrate": "1.0.3"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "server"
+      ],
+      "download_url": "https://github.com/TheRavenSeb/More-Hydrated/releases/download/1.0.0/MoreHydrated.dll",
+      "sha256": "612e3c09902b3e8f6e6a4f3b510641b11b99b445b69f2397b7edbe6b053f8aaa",
+      "library_dependencies": []
+    }
+  ]
+}
