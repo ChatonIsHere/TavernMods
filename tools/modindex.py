@@ -20,6 +20,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -1060,6 +1061,23 @@ def _screenshots_for(m):
     return out
 
 
+def index_owner(root, explicit=None):
+    """The GitHub owner this index belongs to: --owner, else GITHUB_REPOSITORY (set in Actions), else the
+    origin remote. None when none of those says."""
+    if explicit:
+        return explicit
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" in repo:
+        return repo.split("/")[0]
+    try:
+        url = subprocess.run(["git", "-C", root, "remote", "get-url", "origin"], capture_output=True,
+                             text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    m = re.search(r"github\.com[:/]([^/]+)/", url)
+    return m.group(1) if m else None
+
+
 def cmd_site(args):
     """Bake the mod list into the page. It reads manifests/, not
     repository.json, because the index doesn't carry screenshots."""
@@ -1081,7 +1099,11 @@ def cmd_site(args):
                      "parity_required": parity_required(m), "latest": latest,
                      "dependencies": m.get("dependencies") or {},
                      "screenshots": _screenshots_for(m)})
-    rows.sort(key=lambda r: r["name"].lower())
+    # The index owner's own mods (ModdingTavern's in ModdingTavern/TavernMods) come first and are marked.
+    owner = index_owner(root, args.owner)
+    for r in rows:
+        r["own"] = bool(owner) and r["id"].split(".")[0].lower() == owner.lower()
+    rows.sort(key=lambda r: (not r["own"], r["name"].lower()))
 
     # Escaping '<' stops a string from closing the <script> it's embedded in.
     data = json.dumps(rows, ensure_ascii=False, indent=2).replace("<", "\\u003c")
@@ -1123,6 +1145,7 @@ def main(argv=None):
 
     s = sub.add_parser("site", help="bake tools/page.html + the mod list into site/index.html")
     s.add_argument("--out", help="output directory (default: site/)")
+    s.add_argument("--owner", help="the index's GitHub owner, whose mods go first (default: from Actions or git)")
     s.set_defaults(func=cmd_site)
 
     args = parser.parse_args(argv)

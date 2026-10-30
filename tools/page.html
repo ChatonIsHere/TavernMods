@@ -82,6 +82,9 @@
     font: 700 .85rem/1.25 var(--serif); color: var(--primary);
   }
   .shot img { width: 100%; height: 100%; object-fit: cover; }
+  /* The index owner's own mods. */
+  .card.own { border: 2px solid var(--primary); }
+  tr.own td.name a::before, .card.own .card-title a::before { content: "\2605  "; color: var(--primary); }
   .card-body { padding: .55rem .65rem .65rem; display: flex; flex-direction: column; gap: .25rem; flex: 1; }
   .card-title { font: 700 .92rem/1.25 var(--serif); }
   .card-meta { font-size: .74rem; color: var(--muted-foreground); }
@@ -272,7 +275,7 @@ const link = (parent, href, value) => {
 
 const card = (m) => {
   const node = document.createElement("article");
-  node.className = "card";
+  node.className = m.own ? "card own" : "card";
   const shot = put(node, "div", "shot");
   const src = (m.screenshots || [])[0];
   if (src) {
@@ -305,6 +308,7 @@ const table = (list) => {
   const body = put(node, "tbody");
   for (const m of list) {
     const row = body.insertRow();
+    if (m.own) row.className = "own";
     link(put(row, "td", "name"), repoUrl(m), m.name).title = text(m.name);
     put(row, "td", "id", m.id).title = m.id;
     link(put(row, "td"), ownerUrl(m), m.author);
