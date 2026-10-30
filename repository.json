@@ -90,6 +90,21 @@
         ]
       }
     },
+    "ModdingTavern.TavernEssentials": {
+      "0": {
+        "name": "TavernEssentials",
+        "author": "ModdingTavern",
+        "description": "What a modded A Township Tale server and its players need to get back to normal, in one DLL.",
+        "parity_required": false,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "0.14.0"
+        ]
+      }
+    },
     "MrDuckTheFifth.SyncLib": {
       "1": {
         "name": "SyncLib",
@@ -117,21 +132,6 @@
         ],
         "versions": [
           "0.2.1"
-        ]
-      }
-    },
-    "Nyx12012.TavernEssentials": {
-      "0": {
-        "name": "TavernEssentials",
-        "author": "Nyx12012",
-        "description": "What a modded A Township Tale server and its players need to get back to normal, in one DLL.",
-        "parity_required": false,
-        "targets": [
-          "client_windows",
-          "server"
-        ],
-        "versions": [
-          "0.14.0"
         ]
       }
     },
