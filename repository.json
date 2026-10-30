@@ -180,5 +180,11 @@
         ]
       }
     }
+  },
+  "replaced": {
+    "Nyx12012.TavernEssentials": {
+      "by": "ModdingTavern.TavernEssentials",
+      "note": "Moved to the Modding Tavern organisation. Same mod."
+    }
   }
 }

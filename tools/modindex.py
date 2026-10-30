@@ -5,8 +5,9 @@ modindex: validates TavernMods submissions and compiles the static index.
   fill-hashes [paths]   write the real sha256 of every artifact and library
   validate [paths]      check submissions, downloading and hashing every file
                         (VirusTotal too when VIRUSTOTAL_API_KEY is set)
-  build                 compile manifests/ into latest*.json and repository.json
-                        (--ingest moves submissions in first, --prune deletes them)
+  build                 compile manifests/ and replacements.json into latest*.json
+                        and repository.json (--ingest moves submissions in first,
+                        --prune deletes them)
   site                  bake tools/page.html with the mod list into site/index.html
 
 paths default to submissions/. Rules: docs/REPO_STRUCTURE.md, which the
@@ -98,6 +99,9 @@ SCREENSHOT_MAX = 4
 _COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 _NON_SUBMISSION_BASENAMES = {"readme.json", "template.json"}
+
+REPLACEMENTS_FILE = "replacements.json"
+_REPLACEMENT_FIELDS = ("by", "note")
 
 
 class ValidationError(Exception):
@@ -496,6 +500,68 @@ def _collect_manifests(root):
     return mods
 
 
+def load_replacements(root):
+    """replacements.json: {old id: {"by": new id, "note": text}}, or {} when
+    there is none. Maintainers edit it; a fork PR can only add a submission."""
+    path = os.path.join(root, REPLACEMENTS_FILE)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        reps = _load_json(path)
+    except ValueError as e:
+        raise ValidationError(f"{REPLACEMENTS_FILE} is not valid JSON: {e}")
+    if not isinstance(reps, dict):
+        raise ValidationError(f"{REPLACEMENTS_FILE} must be an object of old id -> entry")
+    return reps
+
+
+def validate_replacements(reps, mods):
+    """Errors in replacements.json against the published mods: each old id is
+    a valid id, replaced by a different published mod that isn't itself
+    replaced, with only the known fields."""
+    errs = []
+    for old_id, entry in sorted(reps.items()):
+        where = f"{REPLACEMENTS_FILE}: {old_id}"
+        try:
+            parse_id(old_id)
+        except ValidationError as e:
+            errs.append(f"{where}: {e}")
+            continue
+        if not isinstance(entry, dict):
+            errs.append(f'{where}: must be an object with "by" and optionally "note"')
+            continue
+        unknown = sorted(set(entry) - set(_REPLACEMENT_FIELDS))
+        if unknown:
+            errs.append(f"{where}: unknown field(s) {', '.join(unknown)}")
+        new_id = entry.get("by")
+        if not isinstance(new_id, str):
+            errs.append(f'{where}: "by" must be the id of the mod that replaces it')
+            continue
+        if "note" in entry and not isinstance(entry["note"], str):
+            errs.append(f'{where}: "note" must be text')
+        if new_id == old_id:
+            errs.append(f"{where}: a mod can't replace itself")
+        elif new_id in reps:
+            errs.append(f"{where}: replaced by {new_id}, which is replaced too; "
+                        f"point it at {new_id}'s replacement instead")
+        elif new_id not in mods:
+            errs.append(f"{where}: replaced by {new_id}, which isn't published here")
+    return errs
+
+
+def replacement_errors(m, reps):
+    """Why a submission clashes with replacements.json, as a list."""
+    errs = []
+    if m["id"] in reps:
+        errs.append(f"{m['id']} has been replaced by {reps[m['id']].get('by')} and takes "
+                    f"no new releases")
+    for dep_id in sorted(m.get("dependencies") or {}):
+        if dep_id in reps:
+            errs.append(f"dependency {dep_id} has been replaced by {reps[dep_id].get('by')}; "
+                        f"depend on that instead")
+    return errs
+
+
 # -- downloads -----------------------------------------------------------------
 
 def _assert_safe_to_fetch(url):
@@ -823,12 +889,30 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
 def cmd_validate(args):
     root = repo_root(args.repo)
     files = list(_submission_files(args.paths or [os.path.join(root, "submissions")]))
+    rep_failed = False
+    if os.path.isfile(os.path.join(root, REPLACEMENTS_FILE)):
+        print(f"== {REPLACEMENTS_FILE} ==")
+        # A replacement may name a mod submitted in the same PR.
+        ids = set(_known_manifests(root))
+        for path in files:
+            try:
+                ids.add(_load_json(path)["id"])
+            except Exception:
+                pass
+        errs = validate_replacements(load_replacements(root), ids)
+        for e in errs:
+            print(f"  FAIL  {e}")
+        if not errs:
+            print("  OK    every replacement points at a published or submitted mod")
+        rep_failed = bool(errs)
+
     if not files:
         print("No submission manifests to validate.")
-        return 0
+        return 1 if rep_failed else 0
 
     api_key = os.environ.get("VIRUSTOTAL_API_KEY", "").strip() or None
     known = _known_manifests(root)
+    reps = load_replacements(root)
     vt_seen = {}
     failures = 0
     for path in files:
@@ -842,6 +926,8 @@ def cmd_validate(args):
 
         errs = validate_structure(m)
         warns = []
+        if not errs:
+            errs = replacement_errors(m, reps)
         if not errs and (floor := version_floor_error(m, known)):
             errs = [floor]
         if not errs:
@@ -868,7 +954,7 @@ def cmd_validate(args):
             print("  OK    structurally valid, all hashes verified")
 
     print(f"\n{len(files)} manifest(s) checked, {failures} failed.")
-    return 1 if failures else 0
+    return 1 if failures or rep_failed else 0
 
 
 # -- fill-hashes ---------------------------------------------------------------
@@ -964,6 +1050,10 @@ def cmd_build(args):
     root = repo_root(args.repo)
     moved = _ingest_submissions(root) if args.ingest else []
     mods = _collect_manifests(root)
+    reps = load_replacements(root)
+    rep_errs = validate_replacements(reps, mods)
+    if rep_errs:
+        raise ValidationError(f"{REPLACEMENTS_FILE} is invalid:\n  - " + "\n  - ".join(rep_errs))
 
     # Checked repo-wide: a new release can break an old dependent.
     target_errs = []
@@ -977,7 +1067,13 @@ def cmd_build(args):
         raise ValidationError("dependencies share no target with their dependents:\n  - "
                               + "\n  - ".join(target_errs))
 
+    # A replaced mod keeps its manifests and pointers, so a server still on it
+    # can be joined, but leaves the listing.
     repo_index = {"index_version": SUPPORTED_INDEX_MAJOR, "mods": {}}
+    if reps:
+        repo_index["replaced"] = {
+            old_id: {k: reps[old_id][k] for k in _REPLACEMENT_FIELDS if k in reps[old_id]}
+            for old_id in sorted(reps)}
     for mod_id in sorted(mods):
         versions = mods[mod_id]
         author, repo = parse_id(mod_id)
@@ -994,13 +1090,17 @@ def cmd_build(args):
                         ordered_manifest(versions[vs[-1]]))
 
         majors = sorted(by_major, key=int)
+        if mod_id in reps:
+            print(f"kept {mod_id} unlisted: replaced by {reps[mod_id]['by']}")
+            continue
         repo_index["mods"][mod_id] = {
             major: summary_entry(versions[by_major[major][-1]], by_major[major])
             for major in majors}
         print(f"indexed {mod_id}: majors {majors} (latest {ordered_versions[-1]})")
 
     _write_json(os.path.join(root, "repository.json"), repo_index)
-    print(f"\nwrote repository.json ({len(repo_index['mods'])} mod(s))")
+    print(f"\nwrote repository.json ({len(repo_index['mods'])} mod(s), "
+          f"{len(reps)} replaced)")
 
     if args.prune:
         sub_root = os.path.abspath(os.path.join(root, "submissions"))
@@ -1091,8 +1191,9 @@ def cmd_site(args):
         raise ValidationError(f"{template_path} has no {SITE_MARKER} to inject into")
 
     mods = _collect_manifests(root)
+    reps = load_replacements(root)
     rows = []
-    for mod_id in sorted(mods):
+    for mod_id in sorted(set(mods) - set(reps)):
         latest = sorted(mods[mod_id], key=_vkey)[-1]
         m = mods[mod_id][latest]
         rows.append({"id": mod_id, **_display(m), "targets": manifest_targets(m),
