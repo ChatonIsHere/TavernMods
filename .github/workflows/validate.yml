@@ -11,6 +11,7 @@ on:
   pull_request_target:
     paths:
       - "submissions/**"
+      - "replacements.json"
 
 permissions:
   contents: read
@@ -29,6 +30,7 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             const isFork = pr.head.repo && pr.head.repo.full_name !== pr.base.repo.full_name;
+            core.setOutput('fork', isFork ? 'true' : 'false');
             if (!isFork) {
               core.setOutput('ok', 'true');
               return;
@@ -58,13 +60,23 @@ jobs:
               core.setOutput('ok', 'true');
             }
 
-      - name: Overlay the PR's submissions/ onto main
+      - name: Overlay the PR's submissions/ and replacements.json onto main
         if: steps.shape.outputs.ok == 'true'
         env:
           PR_REF: refs/pull/${{ github.event.pull_request.number }}/head
+          IS_FORK: ${{ steps.shape.outputs.fork }}
+        # A fork can't change replacements.json (the shape check above) and may
+        # be branched from an older main, so it is checked against main's copy.
         run: |
           git fetch --no-tags --depth=1 origin "$PR_REF"
           git checkout FETCH_HEAD -- submissions
+          if [ "$IS_FORK" != "true" ]; then
+            if git cat-file -e FETCH_HEAD:replacements.json 2>/dev/null; then
+              git checkout FETCH_HEAD -- replacements.json
+            else
+              rm -f replacements.json
+            fi
+          fi
 
       - uses: actions/setup-python@v7
         if: steps.shape.outputs.ok == 'true'

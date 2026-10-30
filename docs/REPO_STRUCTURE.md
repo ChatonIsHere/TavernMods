@@ -44,6 +44,12 @@ A client always gets its own platform's build, whatever scene the server runs.
         "versions": ["1.0.0", "1.2.0"]   // every release in this major
       }
     }
+  },
+  "replaced": {                          // optional; see Replaced mods
+    "OldDev.ExampleMod": {
+      "by": "ExampleDev.ExampleMod",
+      "note": "Moved to ExampleDev."
+    }
   }
 }
 ```
@@ -51,6 +57,7 @@ A client always gets its own platform's build, whatever scene the server runs.
 - A reader skips the whole file unless `index_version` is `2`. It is versioned separately from `manifest_version`.
 - Every field but `versions` comes from the highest release in that major, in the key order shown. `targets` is the sorted union of that release's artifact targets.
 - The default install is `max(versions)`.
+- A reader ignores a `replaced` entry that isn't an object with a string `by` naming a different id. `note` is optional text.
 
 ## Manifest
 
@@ -246,6 +253,17 @@ A folder with neither file isn't reported. Folders starting with `.` or `~` are 
 - **Toggling** a folder renames `manifest.json` ⇄ `manifest.disabled.json`; the file is never read or rewritten. A loose dll is renamed `X.dll` ⇄ `X.dll.disabled` and always named by `X.dll`; if both names exist, the toggle is refused. Either takes effect at the next game or server start.
 - **Nothing automatic ever enables or disables an untracked mod**: not a headless reconcile, a modlist import, or a client's per-server join. Only a person does, from the launcher's Mod Manager or, on a headless server, by renaming by hand (`modmanager list` shows them, tagged). The one exception: a loose `Mods/<name>.dll` with the same filename as a DLL an install just placed is disabled by the same rename, so MelonLoader doesn't load the mod twice.
 - **Exported modlist:** enabled untracked mods go under a top-level `untracked` key as `{name, kind}`, never in `mods` (a modlist doubles as a headless server's `/modlist` config, which parses every `mods` entry as `id` or `id@version`). An importer shows the block and installs nothing from it. It never fails an import, and importing never disables the importer's own untracked mods.
+
+## Replaced mods
+
+A source can retire a mod in favour of another, for example when it moves to a new owner, by listing it under `replaced` in `repository.json`. The old mod leaves `mods`, but its manifests stay, so a server still running it can be joined.
+
+- **Whose word counts.** An installed mod is replaced only by an entry from the source its record's `source_repo` names. An id named without a source (a dependency, a pin, a modlist entry) uses the default source's entry, else the first configured source's, and only when no source lists that id and some source lists its replacement.
+- **Launcher, installed mods.** The Mod Manager marks a replaced mod and offers to switch. Switching installs the replacement and its dependencies, then uninstalls the old mod once the replacement is installed and enabled for every target the old one is. Installing the replacement any other way from the Mod Manager or Get Mods does the same. Nothing switches on its own.
+- **Dependencies** on a replaced id resolve to the replacement, at its newest major's highest version.
+- **Pins and modlists.** An entry for a replaced id means the replacement at its latest; an exact version is dropped. Importing a modlist disables the old mod, as it does anything else the list leaves out.
+- **Joining.** A server running the old mod is joined as before. A pinned replacement is left out of that join, so the two don't both load.
+- **Headless servers.** TavernLib's reconcile reads a modlist entry for a replaced id as the replacement, and disables the old mod as no longer listed.
 
 ## Displaced folders
 

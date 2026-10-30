@@ -35,6 +35,7 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 
 - it comes from a fork and does anything other than add one file at `submissions/<owner>.<repo>/<version>.json`;
 - its version is already published, or is lower than the highest published version in its major. A fix to an older major is fine, but a new major can't start below the newest version;
+- its id, or a dependency's id, has been replaced (see below);
 - it is `manifest_version` 1, or has a v1 field (`client_side`, `server_side`, `download_url`, `sha256`, `package`, `library_dependencies`) at the top level;
 - its `id`, or a dependency's id, isn't a valid GitHub `owner.repo`, or it depends on itself;
 - an artifact's `download_url` isn't a GitHub release asset under the id's `owner/repo` (libraries may live on any `https://` host);
@@ -46,6 +47,21 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 
 The scan runs when `VIRUSTOTAL_API_KEY` is set. It covers every `dll` artifact and library, and each code-bearing zip member (by extension or magic bytes), scanning each distinct file once. The free key allows 4 requests a minute, so the scan waits for free slots; the `VT_MAX_PER_MINUTE` repository variable raises the cap.
 
+## Replacing a mod
+
+Maintainers only. To retire a mod in favour of another, add it to [`replacements.json`](../replacements.json) in the same PR as the replacement's submission, or after it is published:
+
+```json
+{
+  "OldDev.ExampleMod": {
+    "by": "ExampleDev.ExampleMod",
+    "note": "Moved to ExampleDev."
+  }
+}
+```
+
+The old mod's manifests stay, so servers still running it can be joined, but it leaves the listing and takes no new releases. Launchers offer players the switch; see [REPO_STRUCTURE.md](REPO_STRUCTURE.md#replaced-mods). The checks fail if `by` isn't published or submitted here, is the old id itself, or is replaced too. A fork PR can't change the file.
+
 ## Tooling
 
 [`tools/modindex.py`](../tools/modindex.py) needs only the Python standard library.
@@ -53,8 +69,8 @@ The scan runs when `VIRUSTOTAL_API_KEY` is set. It covers every `dll` artifact a
 | Command | Does | Runs in |
 | --- | --- | --- |
 | `fill-hashes [paths]` | Downloads every artifact and library and writes their `sha256`. | by hand |
-| `validate [paths] [--vt-max-malicious N]` | The checks above. Exits non-zero on failure. | `validate.yml`, on each submission PR |
-| `build [--ingest] [--prune]` | Compiles `manifests/` into the pointers and `repository.json`. `--ingest` first moves submissions into `manifests/`, setting `package`; `--prune` deletes the moved files. | `publish.yml`, on merge to `main` |
+| `validate [paths] [--vt-max-malicious N]` | The checks above, and `replacements.json`. Exits non-zero on failure. | `validate.yml`, on each PR that adds a submission or changes `replacements.json` |
+| `build [--ingest] [--prune]` | Compiles `manifests/` and `replacements.json` into the pointers and `repository.json`. `--ingest` first moves submissions into `manifests/`, setting `package`; `--prune` deletes the moved files. | `publish.yml`, on merge to `main` |
 | `site [--out DIR]` | Bakes `tools/page.html` and the mod list into `site/index.html`. | `pages.yml`, after each build, which also publishes `tools/builder.html` |
 
 `paths` defaults to `submissions/`.
