@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     # The app's own commit (unlike GITHUB_TOKEN's) triggers this workflow again.
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(index)')
+    if: github.event_name != 'push' || github.actor != 'tavernmods-publisher[bot]'
     runs-on: ubuntu-latest
     environment: publish
     steps:

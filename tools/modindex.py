@@ -11,7 +11,8 @@ modindex: validates TavernMods submissions and compiles the static index.
   site                  bake tools/page.html with the mod list into site/index.html
 
 paths default to submissions/. Rules: docs/REPO_STRUCTURE.md, which the
-launcher and TavernLib implement too; change them together.
+launcher (tavern_shared/mods/), TavernLib (Backend/Mods/) and tools/builder.html
+implement too; change them together.
 """
 
 import argparse
@@ -29,6 +30,7 @@ import urllib.error
 import urllib.request
 import uuid
 import zipfile
+import zlib
 from urllib.parse import urlparse
 
 SUPPORTED_MANIFEST_MAJOR = 2
@@ -37,10 +39,11 @@ TARGETS = ("client_windows", "server", "client_android")
 SCENES = ("normal", "quest", "tutorial")
 _PACKAGE_TYPES = ("dll", "zip")
 
-GITHUB_USER_RE = re.compile(r"^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$")
-GITHUB_REPO_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
-SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+# \Z, not $, which also matches before a final newline; ASCII digits only.
+GITHUB_USER_RE = re.compile(r"\A[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\Z")
+GITHUB_REPO_RE = re.compile(r"\A[A-Za-z0-9._-]{1,100}\Z")
+VERSION_RE = re.compile(r"\A[0-9]+\.[0-9]+\.[0-9]+\Z")
+SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 VERSION_SEGMENT_MAX = 2147483647   # TavernLib parses segments as Int32
 
 _MANIFEST_ORDER = [
@@ -147,9 +150,15 @@ def parse_id(mod_id):
         raise ValidationError(f"id author segment {author!r} is not a valid GitHub username")
     if not GITHUB_REPO_RE.match(repo):
         raise ValidationError(f"id repo segment {repo!r} is not a valid GitHub repo name")
-    if repo in (".", ".."):
-        raise ValidationError(f"id segment {repo!r} is path-unsafe")
+    if repo in (".", "..") or repo.endswith("."):
+        raise ValidationError(f"id segment {repo!r} is path-unsafe (Windows drops a trailing dot)")
     return author, repo
+
+
+def case_clash(mod_id, ids):
+    """An id in ids spelled differently but equal ignoring case, else None: on
+    Windows the two would share one Mods/ folder."""
+    return next((k for k in ids if k != mod_id and k.casefold() == mod_id.casefold()), None)
 
 
 def parity_required(m, default=True):
@@ -245,16 +254,23 @@ def _is_https_url(url):
     return p.scheme == "https" and bool(p.hostname)
 
 
+def _release_asset(parts, author, repo):
+    """parts is <author>/<repo>/releases/download/<tag>/<file>: a tagged
+    release asset, which a fork can't serve under its parent's path and a
+    later release can't change."""
+    return (len(parts) == 6 and parts[0].lower() == author.lower() and parts[1].lower() == repo.lower()
+            and parts[2:4] == ["releases", "download"])
+
+
 def _url_owned_by(url, author, repo):
-    """url is a github.com URL under author/repo (case-insensitive, like GitHub)."""
+    """url is a release asset of github.com/author/repo (case-insensitive, like GitHub)."""
     try:
         p = urlparse(url)
     except Exception:
         return False
     if p.scheme != "https" or p.netloc.lower() != "github.com":
         return False
-    parts = [seg for seg in p.path.split("/") if seg]
-    return len(parts) >= 2 and parts[0].lower() == author.lower() and parts[1].lower() == repo.lower()
+    return _release_asset([seg for seg in p.path.split("/") if seg], author, repo)
 
 
 def validate_structure(m, check_urls=True):
@@ -354,9 +370,9 @@ def _artifact_errors(a, i, claimed, author, repo, check_urls):
             errs.append(f"{where}.download_url must be an https:// URL")
         elif author and repo and not _url_owned_by(url, author, repo):
             errs.append(
-                f"{where}.download_url {url!r} must be a GitHub release asset "
-                f"under {author}/{repo} (the repo the id names). A mod can't ship "
-                f"someone else's binary as itself.")
+                f"{where}.download_url {url!r} must be a GitHub release asset, "
+                f"https://github.com/{author}/{repo}/releases/download/<tag>/<file> "
+                f"(the repo the id names, at a tag, so it can't change after review).")
 
     if not isinstance(a.get("sha256"), str) or not SHA256_RE.match(a["sha256"]):
         errs.append(f"{where}.sha256 must be 64 lowercase hex characters")
@@ -515,10 +531,16 @@ def load_replacements(root):
     return reps
 
 
+def _installable_targets(versions):
+    """The targets an installer can take, from the highest version's manifest."""
+    m = versions[max(versions, key=_vkey)]
+    return set(manifest_targets(m)) - {"client_android"}
+
+
 def validate_replacements(reps, mods):
-    """Errors in replacements.json against the published mods: each old id is
-    a valid id, replaced by a different published mod that isn't itself
-    replaced, with only the known fields."""
+    """Errors in replacements.json against mods ({id: {version: manifest}}):
+    each old id is published, replaced by a different published mod that
+    isn't itself replaced and builds every target the old one does."""
     errs = []
     for old_id, entry in sorted(reps.items()):
         where = f"{REPLACEMENTS_FILE}: {old_id}"
@@ -539,14 +561,45 @@ def validate_replacements(reps, mods):
             continue
         if "note" in entry and not isinstance(entry["note"], str):
             errs.append(f'{where}: "note" must be text')
-        if new_id == old_id:
+        if new_id.casefold() == old_id.casefold():
             errs.append(f"{where}: a mod can't replace itself")
         elif new_id in reps:
             errs.append(f"{where}: replaced by {new_id}, which is replaced too; "
                         f"point it at {new_id}'s replacement instead")
         elif new_id not in mods:
             errs.append(f"{where}: replaced by {new_id}, which isn't published here")
+        elif old_id not in mods:
+            errs.append(f"{where}: no such mod is published here")
+        elif lost := _installable_targets(mods[old_id]) - _installable_targets(mods[new_id]):
+            errs.append(f"{where}: {new_id} has no {_targets_text(lost)} build, so installs "
+                        f"of {old_id} there could never switch to it")
     return errs
+
+
+def library_problems(m, known):
+    """(errs, warns): UserLibs/ is shared by every target, so one filename at
+    two sha256s in m is an error, and against another mod's newest release a
+    note: installers refuse to put the two in one game folder."""
+    errs, warns, mine = [], [], {}
+    for a in m["artifacts"]:
+        for lib in a["library_dependencies"]:
+            if mine.setdefault(lib["filename"], lib["sha256"]) != lib["sha256"]:
+                errs.append(f"library {lib['filename']} is pinned at two sha256s across this "
+                            f"mod's artifacts")
+    for mod_id, versions in sorted(known.items()):
+        try:
+            version = max(versions, key=_vkey)
+        except (TypeError, ValueError):
+            continue
+        if mod_id == m["id"]:
+            continue
+        for a in versions[version].get("artifacts") or []:
+            for lib in (a.get("library_dependencies") or []) if isinstance(a, dict) else []:
+                if (isinstance(lib, dict) and lib.get("filename") in mine
+                        and lib.get("sha256") != mine[lib["filename"]]):
+                    warns.append(f"library {lib['filename']} is pinned at another sha256 by "
+                                 f"{mod_id} {version}, so the two can't be installed together")
+    return errs, sorted(set(warns))
 
 
 def replacement_errors(m, reps):
@@ -586,19 +639,36 @@ def _assert_safe_to_fetch(url):
                 f"non-public address {ip}")
 
 
+class _SafeRedirect(urllib.request.HTTPRedirectHandler):
+    """Vets every hop, not just the first URL."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _assert_safe_to_fetch(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_SafeRedirect)
+# TavernLib refuses a bigger download too.
+DOWNLOAD_MAX = ZIP_MAX_TOTAL_UNCOMPRESSED
+
+
 def _urlopen(url, timeout):
     _assert_safe_to_fetch(url)
     req = urllib.request.Request(url, headers={"User-Agent": "modindex"})
-    return urllib.request.urlopen(req, timeout=timeout)
+    return _opener.open(req, timeout=timeout)
 
 
 def download_and_hash(url):
     """Stream url to a temp file; return (temp_path, sha256). Caller deletes it."""
     fd, tmp = tempfile.mkstemp(prefix="modindex_", suffix=".bin")
     h = hashlib.sha256()
+    size = 0
     try:
         with os.fdopen(fd, "wb") as out, _urlopen(url, 120) as r:
             while chunk := r.read(65536):
+                size += len(chunk)
+                if size > DOWNLOAD_MAX:
+                    raise ValidationError(f"{url} is over {DOWNLOAD_MAX // (1024 * 1024)} MB")
                 h.update(chunk)
                 out.write(chunk)
         return tmp, h.hexdigest()
@@ -613,9 +683,22 @@ def _sha256_of_url(url):
     return digest
 
 
-def _sniff_package_from_url(url):
-    with _urlopen(url, 60) as r:
-        return _sniff_package(r.read(8))
+def fetch_verified_head(url, sha256, what):
+    """url's first bytes, after checking the file still hashes to sha256."""
+    try:
+        tmp, actual = download_and_hash(url)
+    except ValidationError:
+        raise
+    except Exception as e:
+        raise ValidationError(f"{what}: could not download {url} ({e})")
+    try:
+        if actual != sha256:
+            raise ValidationError(f"{what}: {url} changed since review (sha256 {actual}, "
+                                  f"manifest says {sha256})")
+        with open(tmp, "rb") as f:
+            return f.read(8)
+    finally:
+        os.remove(tmp)
 
 
 # -- VirusTotal ----------------------------------------------------------------
@@ -723,16 +806,18 @@ def vt_scan(path, sha256, api_key):
     return stats
 
 
-def _vt_scan_path(path, sha, api_key, vt_max_malicious, label, errs, warns, seen=None):
-    """Scan one file: result in warns, gate failure in errs, a scan that can't
-    run is only a note. `seen` (sha -> (label, stats)) scans each distinct file
-    once; a flagged file still fails every label it appears under."""
+def _vt_scan_path(path, sha, api_key, vt_max_malicious, label, errs, warns, seen=None,
+                  require=False):
+    """Scan one file: result in warns, gate failure in errs. A scan that can't
+    run is a note, or with `require` a failure. `seen` (sha -> (label, stats))
+    scans each distinct file once; a flagged file still fails every label it
+    appears under."""
     seen = {} if seen is None else seen
     if sha in seen:
         first, stats = seen[sha]
         if stats is None:
-            warns.append(f"{label}: same file as {first}, whose VirusTotal scan "
-                         f"could not complete; not scanned again")
+            (errs if require else warns).append(
+                f"{label}: same file as {first}, whose VirusTotal scan could not complete")
             return
         warns.append(f"{label}: same file as {first}, already scanned; "
                      f"not scanned again")
@@ -741,7 +826,9 @@ def _vt_scan_path(path, sha, api_key, vt_max_malicious, label, errs, warns, seen
             stats = vt_scan(path, sha, api_key)
         except Exception as e:
             seen[sha] = (label, None)
-            warns.append(f"{label}: VirusTotal scan could not complete ({e}); not gating on it")
+            (errs if require else warns).append(
+                f"{label}: VirusTotal scan could not complete ({e})"
+                + ("" if require else "; not gating on it"))
             return
         seen[sha] = (label, stats)
     mal = stats.get("malicious", 0)
@@ -755,12 +842,33 @@ def _vt_scan_path(path, sha, api_key, vt_max_malicious, label, errs, warns, seen
                     f"--vt-max-malicious={vt_max_malicious}")
 
 
+# Archives inside a zip, by extension or magic bytes. Never unpacked here.
+_ARCHIVE_EXTENSIONS = {".zip", ".7z", ".rar", ".gz", ".tgz", ".tar", ".xz", ".bz2", ".cab", ".nupkg"}
+_ARCHIVE_MAGICS = (b"PK\x03\x04", b"7z\xbc\xaf\x27\x1c", b"Rar!", b"\x1f\x8b", b"MSCF")
+
+
+def nested_archives(zip_path):
+    """The members of zip_path that are archives themselves."""
+    found = []
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            with zf.open(info) as f:
+                head = f.read(8)
+            if (os.path.splitext(info.filename)[1].lower() in _ARCHIVE_EXTENSIONS
+                    or head.startswith(_ARCHIVE_MAGICS)):
+                found.append(info.filename)
+    return found
+
+
 def _is_code_bearing(name, head):
     return (os.path.splitext(name)[1].lower() in _CODE_EXTENSIONS
             or any(head.startswith(m) for m in _CODE_MAGICS))
 
 
-def _vt_scan_zip_members(zip_path, api_key, vt_max_malicious, label, errs, warns, seen=None):
+def _vt_scan_zip_members(zip_path, api_key, vt_max_malicious, label, errs, warns, seen=None,
+                         require=False):
     """Scan each code-bearing member on its own rather than the whole archive,
     which could exceed VirusTotal's size limit."""
     scanned = 0
@@ -779,7 +887,7 @@ def _vt_scan_zip_members(zip_path, api_key, vt_max_malicious, label, errs, warns
                 with os.fdopen(fd, "wb") as out:
                     out.write(data)
                 _vt_scan_path(mtmp, hashlib.sha256(data).hexdigest(), api_key, vt_max_malicious,
-                              f"{label} :: {info.filename}", errs, warns, seen)
+                              f"{label} :: {info.filename}", errs, warns, seen, require)
             finally:
                 os.remove(mtmp)
     if scanned == 0:
@@ -826,6 +934,10 @@ def inspect_zip_bundle(path):
             if ".." in norm.split("/"):
                 errs.append(f"unsafe zip entry {name!r}: path traversal")
                 continue
+            if any(p != p.rstrip(". ") for p in norm.split("/") if p not in ("", ".")):
+                errs.append(f"unsafe zip entry {name!r}: a name ends in a dot or space, "
+                            f"which Windows drops")
+                continue
             mode = (info.external_attr >> 16) & 0xFFFF
             if mode and (mode & 0o170000) == 0o120000:
                 errs.append(f"unsafe zip entry {name!r}: symlink")
@@ -852,13 +964,33 @@ def inspect_zip_bundle(path):
                         "and the mod's main assembly belongs there; DLLs only in "
                         "subfolders are almost always a packaging mistake. Put the "
                         "mod assembly at the archive root.")
+        if not errs:
+            errs += _zip_read_errors(zf)
     return errs
 
 
+def _zip_read_errors(zf):
+    """Reads every member back, as installers extract them, counting what is
+    produced: headers can understate a bomb, and an encrypted or oddly
+    compressed member only fails here."""
+    total = 0
+    for info in zf.infolist():
+        try:
+            with zf.open(info) as f:
+                while chunk := f.read(1 << 20):
+                    total += len(chunk)
+                    if total > ZIP_MAX_TOTAL_UNCOMPRESSED:
+                        return [f"zip extracts to over {ZIP_MAX_TOTAL_UNCOMPRESSED} bytes"]
+        except (RuntimeError, NotImplementedError, zipfile.BadZipFile, EOFError, zlib.error) as e:
+            return [f"zip entry {info.filename!r} can't be read ({e}); use stored or "
+                    f"deflated members, unencrypted"]
+    return []
+
+
 def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=False,
-                vt_seen=None):
-    """Download url, verify its hash, inspect it if it's a zip artifact, and
-    scan it. Returns (errs, warns)."""
+                vt_seen=None, require_vt=False):
+    """Download url, verify its hash, check an artifact is a dll or a sound
+    zip, and scan it. Returns (errs, warns)."""
     errs, warns = [], []
     try:
         tmp, actual = download_and_hash(url)
@@ -869,18 +1001,28 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
             errs.append(f"{label}: sha256 mismatch, manifest says {expected_sha}, file is {actual}")
             return errs, warns
         with open(tmp, "rb") as f:
-            is_zip = allow_zip and _sniff_package(f.read(8)) == "zip"
+            head = f.read(8)
+        is_zip = allow_zip and _sniff_package(head) == "zip"
+        if allow_zip and not is_zip and head[:2] != b"MZ":
+            errs.append(f"{label}: the file is neither a zip nor a DLL (no MZ header)")
+            return errs, warns
         if is_zip:
             warns.append(f"{label}: detected a zip bundle (package=zip)")
             errs += [f"{label}: {e}" for e in inspect_zip_bundle(tmp)]
             if errs:
                 return errs, warns
+            warns += [f"{label}: {name} is an archive inside the zip; installers extract it "
+                      f"as a file, and nothing here scans what it holds"
+                      for name in nested_archives(tmp)]
         if not api_key:
-            warns.append(f"{label}: VirusTotal skipped (no VIRUSTOTAL_API_KEY set)")
+            (errs if require_vt else warns).append(
+                f"{label}: VirusTotal skipped (no VIRUSTOTAL_API_KEY set)")
         elif is_zip:
-            _vt_scan_zip_members(tmp, api_key, vt_max_malicious, label, errs, warns, vt_seen)
+            _vt_scan_zip_members(tmp, api_key, vt_max_malicious, label, errs, warns, vt_seen,
+                                 require_vt)
         else:
-            _vt_scan_path(tmp, actual, api_key, vt_max_malicious, label, errs, warns, vt_seen)
+            _vt_scan_path(tmp, actual, api_key, vt_max_malicious, label, errs, warns, vt_seen,
+                          require_vt)
     finally:
         os.remove(tmp)
     return errs, warns
@@ -889,17 +1031,20 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
 def cmd_validate(args):
     root = repo_root(args.repo)
     files = list(_submission_files(args.paths or [os.path.join(root, "submissions")]))
+    known = _known_manifests(root)
+    submitted = {}
+    for path in files:
+        try:
+            m = _load_json(path)
+            submitted.setdefault(m["id"], {})[m["version"]] = m
+        except Exception:
+            pass
     rep_failed = False
     if os.path.isfile(os.path.join(root, REPLACEMENTS_FILE)):
         print(f"== {REPLACEMENTS_FILE} ==")
         # A replacement may name a mod submitted in the same PR.
-        ids = set(_known_manifests(root))
-        for path in files:
-            try:
-                ids.add(_load_json(path)["id"])
-            except Exception:
-                pass
-        errs = validate_replacements(load_replacements(root), ids)
+        both = {i: {**known.get(i, {}), **submitted.get(i, {})} for i in set(known) | set(submitted)}
+        errs = validate_replacements(load_replacements(root), both)
         for e in errs:
             print(f"  FAIL  {e}")
         if not errs:
@@ -911,8 +1056,9 @@ def cmd_validate(args):
         return 1 if rep_failed else 0
 
     api_key = os.environ.get("VIRUSTOTAL_API_KEY", "").strip() or None
-    known = _known_manifests(root)
     reps = load_replacements(root)
+    sub_root = os.path.join(os.path.abspath(root), "submissions")
+    all_ids = set(known) | set(reps) | set(submitted)
     vt_seen = {}
     failures = 0
     for path in files:
@@ -928,10 +1074,19 @@ def cmd_validate(args):
         warns = []
         if not errs:
             errs = replacement_errors(m, reps)
+            want = os.path.join(sub_root, m["id"], f'{m["version"]}.json')
+            if os.path.abspath(path).startswith(sub_root + os.sep) and os.path.abspath(path) != want:
+                errs.append(f"must be at submissions/{m['id']}/{m['version']}.json, its id and version")
+            if other := case_clash(m["id"], all_ids):
+                errs.append(f"id {m['id']} differs from {other} only in case; on Windows "
+                            f"both would install to one folder")
         if not errs and (floor := version_floor_error(m, known)):
             errs = [floor]
         if not errs:
             errs, warns = validate_dependency_targets(m, known)
+            lib_errs, lib_warns = library_problems(m, known)
+            errs += lib_errs
+            warns += lib_warns
         if not errs:
             for i, art in enumerate(m["artifacts"]):
                 label = f"artifacts[{i}] ({'+'.join(art['targets'])})"
@@ -940,7 +1095,8 @@ def cmd_validate(args):
                     for j, lib in enumerate(art["library_dependencies"])]
                 for obj, what, allow_zip in checks:
                     e, w = _check_file(obj["download_url"], obj["sha256"], api_key,
-                                       args.vt_max_malicious, what, allow_zip, vt_seen)
+                                       args.vt_max_malicious, what, allow_zip, vt_seen,
+                                       args.require_vt)
                     errs += e
                     warns += w
 
@@ -1024,25 +1180,35 @@ def cmd_fill(args):
 
 def _ingest_submissions(root):
     """Move each valid submission into manifests/, with package sniffed from
-    its file. Returns the moved paths."""
+    its file after re-checking every hash, since a release asset can be
+    replaced after review. An identical copy of a published one is only
+    pruned. Returns the moved paths."""
     moved = []
     for path in _submission_files([os.path.join(root, "submissions")]):
+        rel = os.path.relpath(path, root)
         m = _load_json(path)
         errs = validate_structure(m)
         if errs:
-            raise ValidationError(
-                f"{os.path.relpath(path, root)} is not structurally valid:\n  - "
-                + "\n  - ".join(errs))
+            raise ValidationError(f"{rel} is not structurally valid:\n  - " + "\n  - ".join(errs))
         author, repo = parse_id(m["id"])
         dest = os.path.join(root, "manifests", author, repo, f'{m["version"]}.json')
+        for i, art in enumerate(m["artifacts"]):
+            head = fetch_verified_head(art["download_url"], art["sha256"], f"{rel} artifacts[{i}]")
+            art["package"] = _sniff_package(head)
+            if art["package"] == "dll" and head[:2] != b"MZ":
+                raise ValidationError(f"{rel} artifacts[{i}]: the file is neither a zip nor a DLL")
+            for j, lib in enumerate(art["library_dependencies"]):
+                fetch_verified_head(lib["download_url"], lib["sha256"], f"{rel} artifacts[{i}] library[{j}]")
+        out = ordered_manifest(m)
         if os.path.exists(dest):
-            raise ValidationError(f"{os.path.relpath(path, root)} would overwrite "
-                                  f"{os.path.relpath(dest, root)}, which is published")
-        for art in m["artifacts"]:
-            art["package"] = _sniff_package_from_url(art["download_url"])
-        _write_json(dest, ordered_manifest(m))
+            if _load_json(dest) != out:
+                raise ValidationError(f"{rel} would overwrite {os.path.relpath(dest, root)}, "
+                                      f"which is published")
+            print(f"skipped {rel}: identical to the published {os.path.relpath(dest, root)}")
+        else:
+            _write_json(dest, out)
+            print(f"ingested {rel} -> {os.path.relpath(dest, root)}")
         moved.append(path)
-        print(f"ingested {os.path.relpath(path, root)} -> {os.path.relpath(dest, root)}")
     return moved
 
 
@@ -1131,8 +1297,8 @@ def _screenshot_ok(url, author, repo):
         return f"must live under {author}/{repo}"
     host = p.netloc.lower()
     if host == "github.com":
-        return None if parts[2].lower() == "releases" else (
-            "on github.com, only a release asset URL is accepted")
+        return None if _release_asset(parts, author, repo) else (
+            "on github.com, only a tagged release asset URL is accepted")
     if host == "raw.githubusercontent.com":
         return None if _COMMIT_SHA_RE.match(parts[2]) else (
             "a raw URL must pin a 40-character commit sha rather than a "
@@ -1235,6 +1401,8 @@ def main(argv=None):
     v.add_argument("paths", nargs="*", help="manifest files or dirs (default: submissions/)")
     v.add_argument("--vt-max-malicious", type=int, default=None,
                    help="fail if VirusTotal malicious count exceeds this (default: report only)")
+    v.add_argument("--require-vt", action="store_true",
+                   help="fail when a VirusTotal scan can't run, as CI does")
     v.set_defaults(func=cmd_validate)
 
     b = sub.add_parser("build", help="compile pointers + repository.json")
