@@ -1,7 +1,8 @@
 name: Publish index
 
 # After a merge to main: ingest submissions/ into manifests/, rebuild the
-# latest*.json pointers and repository.json, and commit the result.
+# latest*.json pointers and repository.json (with replacements.json), and
+# commit the result.
 #
 # main is protected, so the push uses a token from a GitHub App on the ruleset
 # bypass list. Its client id and private key live as PUBLISH_APP_CLIENT_ID and
@@ -14,6 +15,7 @@ on:
     paths:
       - "submissions/**"
       - "manifests/**"
+      - "replacements.json"
       - "tools/**"
   workflow_dispatch:
 
