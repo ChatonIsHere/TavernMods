@@ -399,8 +399,10 @@ function isHttps(url) { try { return new URL(url).protocol === "https:"; } catch
 function ownedBy(url) {
   try {
     const u = new URL(url), parts = u.pathname.split("/").filter(Boolean);
-    return u.protocol === "https:" && u.hostname.toLowerCase() === "github.com" && parts.length >= 2
-      && parts[0].toLowerCase() === state.owner.toLowerCase() && parts[1].toLowerCase() === state.repo.toLowerCase();
+    // A tagged release asset, as modindex.py's _release_asset: nothing a fork or a later release can change.
+    return u.protocol === "https:" && u.hostname.toLowerCase() === "github.com" && parts.length === 6
+      && parts[0].toLowerCase() === state.owner.toLowerCase() && parts[1].toLowerCase() === state.repo.toLowerCase()
+      && parts[2] === "releases" && parts[3] === "download";
   } catch { return false; }
 }
 const versionProblem = (v, what) => !VERSION_RE.test(v) ? `${what} must be MAJOR.MINOR.PATCH, like 1.0.0.`
@@ -448,7 +450,7 @@ function problems(m) {
       else claimed[t] = i;
     }
     if (!a.download_url) out.push(`${n} needs its release asset link.`);
-    else if (!ownedBy(a.download_url)) out.push(`${n}'s link must be a release asset under github.com/${state.owner || "owner"}/${state.repo || "repo"}.`);
+    else if (!ownedBy(a.download_url)) out.push(`${n}'s link must be a release asset: github.com/${state.owner || "owner"}/${state.repo || "repo"}/releases/download/<tag>/<file>.`);
     if (a.sha256 === SHA_PLACEHOLDER) hashless.push(n);
     else if (!SHA_RE.test(a.sha256)) out.push(`${n}'s SHA-256 must be 64 lowercase hex characters.`);
     a.library_dependencies.forEach((l, j) => {
