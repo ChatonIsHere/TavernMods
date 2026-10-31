@@ -426,7 +426,7 @@ class Validate(unittest.TestCase):
             paths.append(os.path.join(self.root, "submissions", m["id"], f'{m["version"]}.json'))
             mi._write_json(paths[-1], m)
         return run_quiet(mi.cmd_validate, repo=self.root, paths=paths,
-                         vt_max_malicious=vt_max_malicious)
+                         vt_max_malicious=vt_max_malicious, require_vt=False)
 
     def split(self, server_zip):
         return manifest(artifacts=[
@@ -567,8 +567,8 @@ class FetchSafety(unittest.TestCase):
 class Build(unittest.TestCase):
     def setUp(self):
         self.root = temp_dir(self)
-        stub(self, mi, "_sniff_package_from_url",
-             lambda url: "zip" if url.endswith(".zip") else "dll")
+        stub(self, mi, "fetch_verified_head",
+             lambda url, sha256, what: b"PK\x03\x04" if url.endswith(".zip") else b"MZ\x90\x00")
 
     def submit(self, m):
         mi._write_json(os.path.join(self.root, "submissions", m["id"], f'{m["version"]}.json'), m)
@@ -678,7 +678,7 @@ class Build(unittest.TestCase):
         self.build()
         self.assertTrue(os.path.exists(tmpl))
         self.assertEqual(list(self.read("repository.json")["mods"]), ["Owner.Repo"])
-        rc, _ = run_quiet(mi.cmd_validate, repo=self.root, paths=None, vt_max_malicious=None)
+        rc, _ = run_quiet(mi.cmd_validate, repo=self.root, paths=None, vt_max_malicious=None, require_vt=False)
         self.assertEqual(rc, 0)
 
     def test_repo_template_is_v2_apart_from_its_placeholder_hash(self):
@@ -717,7 +717,7 @@ class Site(unittest.TestCase):
             m = manifest(version=v, **extra)
             m["artifacts"][0]["package"] = "dll"
             mi._write_json(os.path.join(root, "manifests", "Owner", "Repo", f"{v}.json"), m)
-        rc, out = run_quiet(mi.cmd_site, repo=root, out=None)
+        rc, out = run_quiet(mi.cmd_site, repo=root, out=None, owner=None)
         self.assertEqual(rc, 0)
         self.assertIn("only the first 4", out)
         with open(os.path.join(root, "site", "index.html"), encoding="utf-8") as f:
@@ -789,7 +789,7 @@ class VersionFloor(unittest.TestCase):
         mi._write_json(path, manifest(version="1.1.0"))
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            rc = mi.cmd_validate(argparse.Namespace(repo=root, paths=[path], vt_max_malicious=None))
+            rc = mi.cmd_validate(argparse.Namespace(repo=root, paths=[path], vt_max_malicious=None, require_vt=False))
         self.assertEqual(rc, 1)
         self.assertIn("FAIL  Owner.Repo 1.1.0 is lower than 1.2.0", out.getvalue())
 
