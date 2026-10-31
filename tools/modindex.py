@@ -842,6 +842,26 @@ def _vt_scan_path(path, sha, api_key, vt_max_malicious, label, errs, warns, seen
                     f"--vt-max-malicious={vt_max_malicious}")
 
 
+# Archives inside a zip, by extension or magic bytes. Never unpacked here.
+_ARCHIVE_EXTENSIONS = {".zip", ".7z", ".rar", ".gz", ".tgz", ".tar", ".xz", ".bz2", ".cab", ".nupkg"}
+_ARCHIVE_MAGICS = (b"PK\x03\x04", b"7z\xbc\xaf\x27\x1c", b"Rar!", b"\x1f\x8b", b"MSCF")
+
+
+def nested_archives(zip_path):
+    """The members of zip_path that are archives themselves."""
+    found = []
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            with zf.open(info) as f:
+                head = f.read(8)
+            if (os.path.splitext(info.filename)[1].lower() in _ARCHIVE_EXTENSIONS
+                    or head.startswith(_ARCHIVE_MAGICS)):
+                found.append(info.filename)
+    return found
+
+
 def _is_code_bearing(name, head):
     return (os.path.splitext(name)[1].lower() in _CODE_EXTENSIONS
             or any(head.startswith(m) for m in _CODE_MAGICS))
@@ -991,6 +1011,9 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
             errs += [f"{label}: {e}" for e in inspect_zip_bundle(tmp)]
             if errs:
                 return errs, warns
+            warns += [f"{label}: {name} is an archive inside the zip; installers extract it "
+                      f"as a file, and nothing here scans what it holds"
+                      for name in nested_archives(tmp)]
         if not api_key:
             (errs if require_vt else warns).append(
                 f"{label}: VirusTotal skipped (no VIRUSTOTAL_API_KEY set)")
