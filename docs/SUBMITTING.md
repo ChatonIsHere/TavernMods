@@ -27,7 +27,7 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 - a target or scene name is unknown, or `scenes` lists all three;
 - a dependency in this repo shares no target with your mod, judged on the version an install would pick. Partial overlap, or a dependency from another source, gets a note instead;
 - one library `filename` has two `sha256`s across your artifacts. The same filename at another `sha256` in another listed mod gets a note: the two can't be installed together;
-- a zip isn't valid or can't be read back (encrypted, or an unusual compression), has no `.dll` at its root, has an unsafe member (absolute path, colon, escaping `..`, symlink, a name ending in a dot or space), or exceeds 2000 entries, 500 MB extracted, or a 200:1 compression ratio on any entry over 1 MB;
+- a zip isn't valid or can't be read back (encrypted, or an unusual compression), has no `.dll` at its root, has an unsafe member (absolute path, colon, escaping `..`, symlink, a name ending in a dot or space), or exceeds 2000 entries, 500 MB extracted, or a 200:1 compression ratio on any entry over 1 MB. An archive inside the zip gets a note: it isn't unpacked or scanned;
 - VirusTotal can't scan a file, or counts it malicious more times than the `VT_MAX_MALICIOUS` repository variable allows (default 0). Every `dll` artifact and library and each code-bearing zip member is scanned.
 
 The hashes are checked again when the submission is published, so a file changed after review stops the publish.
