@@ -139,7 +139,7 @@ There is no mod-level `filename`. `name`, `author`, `description` and the librar
 <game>/UserLibs/<filename>.meta.json    library sidecar: { filename, sha256, download_url }
 ```
 
-- The client launcher installs only `client_windows`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's: a client never disables a mod this folder's server runs. Nothing else goes directly in `Mods/<id>/`.
+- The client launcher installs only `client_windows`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's: a client never disables a mod this folder's server runs. Installers put nothing else directly in `Mods/<id>/`, and an install replaces only the record and the `.<target>/` folders, so data a mod keeps beside them survives an update (a pre-v2 layout's files are replaced too).
 - A *bare basename* is a name other than empty, `.` or `..`, with no `/`, `\` or `:`, that doesn't end in a dot or space.
 - `dll`: saved into the target folder under the `download_url`'s percent-decoded basename if that is a bare basename ending in `.dll`, else as `<id>.dll`.
 - `zip`: extracted into the target folder. A member with an absolute path, a colon, a `..` that escapes, a name ending in a dot or space, or a symlink refuses the whole install. A member that resolves (case-insensitively, after `.` and `..`) to `manifest.json` or `manifest.disabled.json` at the root is skipped.
