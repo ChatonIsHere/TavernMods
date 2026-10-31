@@ -129,6 +129,15 @@ class Validating(unittest.TestCase):
         self.assertFails("ends in a dot or space",
                          self.serve(manifest(artifacts=[artifact(asset="Repo.zip")]), data))
 
+    def test_an_archive_inside_the_zip_is_noted_not_unpacked(self):
+        inner = zip_bytes([("Hidden.dll", b"MZ hidden")])
+        data = zip_bytes([("Repo.dll", b"MZ mod"), ("extras/pack.bin", inner), ("more.7z", b"x")])
+        rc, out = self.validate(self.serve(manifest(artifacts=[artifact(asset="Repo.zip")]), data))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("extras/pack.bin is an archive inside the zip", out)
+        self.assertIn("more.7z is an archive inside the zip", out)
+        self.assertNotIn("Hidden.dll", out)
+
     def test_ci_fails_a_scan_that_cant_run(self):
         os.environ.pop("VIRUSTOTAL_API_KEY")
         m = self.serve(manifest(), b"MZ build")
