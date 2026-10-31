@@ -11,7 +11,7 @@ A source is one base URL, the raw-content root a user pastes into **Add source**
 | `repository.json` | The index. Required. The only file read while browsing; holds no install data. |
 | `manifests/<author>/<repo>/<version>.json` | One manifest per release. Immutable, kept forever. Fetched (by id and version) only to install. |
 | `manifests/<author>/<repo>/latest.json` | Copy of the highest version. |
-| `manifests/<author>/<repo>/latest.<major>.json` | Copy of the highest version in that major. |
+| `manifests/<author>/<repo>/latest.<major>.json` | Copy of the highest version in that major. Installers don't read it. |
 
 `<author>` and `<repo>` are the two halves of the mod's id.
 
@@ -24,8 +24,6 @@ A target is the build a process runs, not a game scene.
 | `client_windows` | The game on Windows as a player: SteamVR, a Quest over Link, or flycam. |
 | `server` | A game server, launcher-run or headless (Windows). |
 | `client_android` | The standalone Quest headset. Validated, but nothing installs it yet. |
-
-A client always gets its own platform's build, whatever scene the server runs.
 
 ## repository.json
 
@@ -105,15 +103,15 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | Field | Rule |
 | --- | --- |
 | `manifest_version` | Integer `2`. A reader skips a manifest with any other major. |
-| `id` | `<github-user>.<github-repo>`. The text before the first dot is the author. No path separators, no `.` or `..` segment. |
+| `id` | `<github-user>.<github-repo>`. The text before the first dot is the author. No path separators, no `.` or `..` segment, and no trailing dot or space. |
 | `name` | Defaults to `id`. |
 | `version` | `MAJOR.MINOR.PATCH`: three segments of ASCII digits, each at most 2147483647. No suffix. |
 | `author` | Defaults to the text before the first dot in `id`. |
 | `description` | Free text. |
 | `screenshots` | Optional list of image URLs for this repo's page. Installers ignore it. |
 | `parity_required` | Required boolean: whether a player needs this mod, at the server's exact version, to join a server running it. It compares versions, not files, so separate client and server artifacts don't affect it. Readers refuse a missing or non-boolean value. See [Joining a server](#joining-a-server). |
-| `scenes` | Optional non-empty list of distinct scenes the mod works in, out of `normal`, `quest`, `tutorial`. Absent or `null` means all; listing all three is rejected. |
-| `dependencies` | Always present. `{}` or `{"<mod id>": "<minimum version>"}`. |
+| `scenes` | Optional non-empty list of distinct scenes the mod works in, out of `normal`, `quest`, `tutorial`. Absent or `null` means all. |
+| `dependencies` | Always present. `{}` or `{"<mod id>": "<minimum version>"}`, versions as strings. |
 | `artifacts` | Required, non-empty. One entry per build. |
 | `artifacts[].targets` | Non-empty list. A target may appear in only one artifact; a duplicate refuses the manifest. A target no artifact lists is unsupported. |
 | `artifacts[].download_url` | `https://` URL of one `.dll` or one `.zip`. |
@@ -121,23 +119,15 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | `artifacts[].package` | `"dll"` or `"zip"`, set by the tooling from the file's bytes (`PK` = zip), never by the author. Matched exactly: any other value, or none, and the artifact is ignored. |
 | `artifacts[].library_dependencies` | Always present. `[]` or a list of libraries (fields above). |
 
-There is no mod-level `filename`.
+There is no mod-level `filename`. `name`, `author`, `description` and the library fields are strings; readers refuse a manifest with another type there rather than convert it.
 
-**Unknown names.** Readers ignore unknown target names (and an artifact left with no known target) and keep unknown scene names, so later additions don't break old builds. This repo's validator rejects both.
+**Unknown names.** Readers ignore unknown target names (and an artifact left with no known target) and keep unknown scene names, so later additions don't break old builds.
 
-**Dependencies** are other mods, each in its own `Mods/<id>/`, resolved with conflict detection. The candidates are the versions in the minimum's major at or above it; the highest wins. Each install is for one target (`client_windows` from the client launcher, `server` from the server launcher and TavernLib). A dependency with no artifact for that target is left out, along with anything only it needed, and the installer logs it. This repo's validator rejects a dependency that shares no target with the mod, and notes one that covers only some of its targets.
+**Dependencies** are other mods, each in its own `Mods/<id>/`, resolved with conflict detection. The candidates are the versions in the minimum's major at or above it; the highest wins. A dependency with no artifact for the install's target is left out, along with anything only it needed, and the installer logs it. A mod being installed alongside is never swapped for another version: a dependency it doesn't satisfy is a conflict. TavernLib's reconcile resolves each modlist entry on its own, so two entries needing different majors of one dependency end with the later one's.
 
 **Libraries** install flat to `UserLibs/<filename>`, pinned by `filename` and `sha256`: no version resolution, no ownership check, any `https://` host. The same `filename` with the same `sha256` installs once, whatever the URLs. The same `filename` with a different `sha256` anywhere in the game folder, for any target, is a conflict, and the install is refused.
 
 **Packaging.** A zip holds the build's own code and asset bundles, with at least one `.dll` at its root. Third-party or shared files go in `library_dependencies`. A native DLL must be a library: MelonLoader only searches `UserLibs/` for native DLLs.
-
-**Screenshots.** This repo's page bakes in the first four at build time, and only those that are:
-
-- `https://` on `github.com` or `raw.githubusercontent.com`, under the mod's own `owner/repo`;
-- immutable: a release asset, or a raw URL pinned to a 40-character commit sha;
-- `.png`, `.jpg`, `.jpeg`, `.webp` or `.gif`.
-
-Others are skipped, with the reason in the build log.
 
 ## Install layout
 
@@ -149,13 +139,13 @@ Others are skipped, with the reason in the build log.
 <game>/UserLibs/<filename>.meta.json    library sidecar: { filename, sha256, download_url }
 ```
 
-- The client launcher installs only `client_windows`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's. Nothing else goes directly in `Mods/<id>/`.
-- A *bare basename* is a name other than empty, `.` or `..`, with no `/`, `\` or `:`.
-- `dll`: saved into the target folder under the `download_url`'s basename if that is a bare basename ending in `.dll`, else as `<id>.dll`.
-- `zip`: extracted into the target folder. A member with an absolute path, a colon, a `..` that escapes, or a symlink refuses the whole install. A member that resolves (case-insensitively, after `.` and `..`) to `manifest.json` or `manifest.disabled.json` at the root is skipped.
+- The client launcher installs only `client_windows`; the server launcher and TavernLib only `server`. Both folders can exist at once, and neither side touches the other's: a client never disables a mod this folder's server runs. Nothing else goes directly in `Mods/<id>/`.
+- A *bare basename* is a name other than empty, `.` or `..`, with no `/`, `\` or `:`, that doesn't end in a dot or space.
+- `dll`: saved into the target folder under the `download_url`'s percent-decoded basename if that is a bare basename ending in `.dll`, else as `<id>.dll`.
+- `zip`: extracted into the target folder. A member with an absolute path, a colon, a `..` that escapes, a name ending in a dot or space, or a symlink refuses the whole install. A member that resolves (case-insensitively, after `.` and `..`) to `manifest.json` or `manifest.disabled.json` at the root is skipped.
 - A library `filename` must be a bare basename.
 
-**Which build loads.** MelonLoader 0.7 loads a `Mods/<name>/` folder that contains a `manifest.json` (it only checks the file exists), plus every subfolder except those starting with `.` or `~` (and a few reserved names). So it loads neither `.client_windows/` nor `.server/`. TavernLib adds one back: `.server/` in a server process (started with `/start_server`), `.client_windows/` otherwise. It adds that folder and its non-excluded subfolders to MelonLoader's mod folders and assembly search path, only for mods whose record is enabled, ours, and lists that target in `installed`. Without TavernLib, managed mods don't load; a process never loads two builds.
+**Which build loads.** MelonLoader 0.7 loads a `Mods/<name>/` folder holding a `manifest.json`, and its subfolders except those starting with `.` or `~`, so it loads neither build folder. TavernLib adds one back, with its subfolders: `.server/` in a server process (started with `/start_server`), `.client_windows/` otherwise, only for mods whose record is enabled, ours, and lists that target in `installed`. Without TavernLib, managed mods don't load; a process never loads two builds.
 
 ## Install record
 
@@ -191,9 +181,10 @@ Others are skipped, with the reason in the build log.
 - **Install** of target T:
   - leaves the mod enabled: the record ends as `manifest.json` and any `manifest.disabled.json` is gone, which re-enables every target;
   - at the record's version, replaces only `.T/` and `installed.T`;
-  - at any other version, or when the record has no `installed`, replaces the whole mod: other targets' entries are dropped and their folders removed, best effort (a folder left behind is out of `installed`, so nothing loads it);
+  - at any other version, or when the record has no `installed`, replaces the whole mod: other targets' entries are dropped and their folders removed;
+  - moves what it replaces aside before placing the new folder, and if any of it is in use (a running game or server), fails with nothing changed;
   - writes the record last, after the target folder is in place.
-- **Ours:** the record is the first of `manifest.json`, `manifest.disabled.json` that is strict UTF-8 (no BOM) holding a JSON object with a non-empty string `id`. The folder is ours only if that record's `parity_required` is a JSON boolean. Anything else is untracked, and never deleted.
+- **Ours:** the record is the first of `manifest.json`, `manifest.disabled.json` that is strict UTF-8 (no BOM) holding a JSON object whose `id` is the folder's name. The folder is ours only if that record's `parity_required` is a JSON boolean. Anything else is untracked, and never deleted. A record file that exists but can't be read (it is locked, say) is listed untracked, and an install there fails rather than displacing it.
 - **Damaged:** a target whose `files` don't all match the disk. An installer repairs it the next time it would otherwise call it current.
 - **Disable:** rename `manifest.json` to `manifest.disabled.json`. Files stay; MelonLoader skips the folder, so no target loads. One switch for the whole mod. **Enable** renames it back.
 - **Uninstall:** delete `Mods/<id>/`. A library is deleted only when no remaining record's `installed` lists it.
@@ -251,8 +242,8 @@ A folder with neither file isn't reported. Folders starting with `.` or `~` are 
 | Exported modlist | in `mods` | in `untracked`, listed, never installed |
 
 - **Toggling** a folder renames `manifest.json` ⇄ `manifest.disabled.json`; the file is never read or rewritten. A loose dll is renamed `X.dll` ⇄ `X.dll.disabled` and always named by `X.dll`; if both names exist, the toggle is refused. Either takes effect at the next game or server start.
-- **Nothing automatic ever enables or disables an untracked mod**: not a headless reconcile, a modlist import, or a client's per-server join. Only a person does, from the launcher's Mod Manager or, on a headless server, by renaming by hand (`modmanager list` shows them, tagged). The one exception: a loose `Mods/<name>.dll` with the same filename as a DLL an install just placed is disabled by the same rename, so MelonLoader doesn't load the mod twice.
-- **Exported modlist:** enabled untracked mods go under a top-level `untracked` key as `{name, kind}`, never in `mods` (a modlist doubles as a headless server's `/modlist` config, which parses every `mods` entry as `id` or `id@version`). An importer shows the block and installs nothing from it. It never fails an import, and importing never disables the importer's own untracked mods.
+- **Nothing automatic enables or disables an untracked mod**, with one exception: a loose `Mods/<name>.dll` with the same filename as a DLL an install just placed is disabled by the same rename, so MelonLoader doesn't load the mod twice.
+- **Exported modlist:** each `mods` entry is `id` (its latest) or `id@version`. Enabled untracked mods go under a top-level `untracked` key as `{name, kind}`, never in `mods`. An importer shows them and installs nothing from them, and importing never disables the importer's own untracked mods.
 
 ## Replaced mods
 
@@ -260,7 +251,7 @@ A source can retire a mod in favour of another, for example when it moves to a n
 
 - **Whose word counts.** An installed mod is replaced only by an entry from the source its record's `source_repo` names. An id named without a source (a dependency, a pin, a modlist entry) uses the default source's entry, else the first configured source's, and only when no source lists that id and some source lists its replacement.
 - **Launcher, installed mods.** The Mod Manager marks a replaced mod and offers to switch. Switching installs the replacement and its dependencies, then uninstalls the old mod once the replacement is installed and enabled for every target the old one is. Installing the replacement any other way from the Mod Manager or Get Mods does the same. Nothing switches on its own.
-- **Dependencies** on a replaced id resolve to the replacement, at its newest major's highest version.
+- **Dependencies** on a replaced id resolve to the replacement, at its newest major's highest version, and an installed replacement meets them.
 - **Pins and modlists.** An entry for a replaced id means the replacement at its latest; an exact version is dropped. Importing a modlist disables the old mod, as it does anything else the list leaves out.
 - **Joining.** A server running the old mod is joined as before. A pinned replacement is left out of that join, so the two don't both load.
 - **Headless servers.** TavernLib's reconcile reads a modlist entry for a replaced id as the replacement, and disables the old mod as no longer listed.

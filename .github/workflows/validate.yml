@@ -5,7 +5,7 @@ name: Validate submissions
 # Runs on pull_request_target so a fork PR gets VIRUSTOTAL_API_KEY and a token
 # that can comment. That is only safe because nothing from the PR executes:
 # the checkout is main, only the PR's submissions/ is overlaid, and the
-# downloader refuses non-https URLs and non-public hosts.
+# downloader refuses non-https URLs and non-public hosts, at every redirect.
 
 on:
   pull_request_target:
@@ -89,10 +89,12 @@ jobs:
         env:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
           VT_MAX_PER_MINUTE: ${{ vars.VT_MAX_PER_MINUTE }}
+          VT_MAX_MALICIOUS: ${{ vars.VT_MAX_MALICIOUS }}
         # Never fails here so the comment step runs; the last step fails the check.
         run: |
           set +e
-          python tools/modindex.py validate > validate-output.txt 2>&1
+          python tools/modindex.py validate --require-vt --vt-max-malicious "${VT_MAX_MALICIOUS:-0}" \
+            > validate-output.txt 2>&1
           echo "rc=$?" >> "$GITHUB_OUTPUT"
           cat validate-output.txt
 
@@ -109,8 +111,9 @@ jobs:
               head = '## Submission checks: FAILED\n\n' + probs.map(p => '- ' + p).join('\n');
             } else {
               const rc = '${{ steps.validate.outputs.rc }}';
-              const output = fs.existsSync('validate-output.txt')
-                ? fs.readFileSync('validate-output.txt', 'utf8') : '(no output)';
+              // A backtick run from a submitted URL can't close the fence.
+              const output = (fs.existsSync('validate-output.txt')
+                ? fs.readFileSync('validate-output.txt', 'utf8') : '(no output)').replace(/`/g, "'");
               head = rc === '0'
                 ? '## Submission checks: PASSED\n\nA maintainer still reviews this before it can merge.'
                 : '## Submission checks: FAILED\n\nFix the items below and push to this PR; the checks re-run on every push.';
