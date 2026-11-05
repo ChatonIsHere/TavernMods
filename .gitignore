@@ -3,3 +3,6 @@ __pycache__/
 site/
 .DS_Store
 Thumbs.db
+web/node_modules/
+web/dist/
+web/public/r/

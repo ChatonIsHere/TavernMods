@@ -1,6 +1,7 @@
 name: Publish page
 
-# Bakes the browsable page and deploys it to GitHub Pages (Settings -> Pages
+# Builds the site in web/ (the mod list and the manifest builder), bakes the
+# mod list into it, and deploys it to GitHub Pages (Settings -> Pages
 # -> Source must be "GitHub Actions"). Nothing is committed.
 #
 # Chained after "Publish index" rather than sharing its trigger, so the page
@@ -39,9 +40,23 @@ jobs:
         with:
           python-version: "3.x"
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "lts/*"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Builds both pages and the theme registry (r/) into web/dist/.
+      - working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # Copy the whole build, then bake the mod list over its index.html.
       - run: |
+          mkdir -p site
+          cp -r web/dist/. site/
           python tools/modindex.py site
-          cp tools/builder.html site/
 
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
