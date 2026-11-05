@@ -1,0 +1,33 @@
+/* The dependency graph's marks. Colours are the theme's tokens. */
+.tm-graph svg { touch-action: none; user-select: none; cursor: grab; }
+.tm-graph svg[data-panning] { cursor: grabbing; }
+
+.tm-graph .edge { stroke: var(--muted-foreground); stroke-width: 1.4; }
+.tm-graph .edge.hot { stroke: var(--primary); stroke-width: 2; }
+.tm-graph .arrow { fill: var(--muted-foreground); }
+.tm-graph .arrow.hot { fill: var(--primary); }
+
+.tm-graph .node { cursor: pointer; outline: none; }
+.tm-graph .node .hit { fill: transparent; }
+.tm-graph .node .dot { fill: var(--muted); stroke: var(--primary); stroke-width: 1.6; }
+.tm-graph .node.external .dot { fill: var(--background); stroke: var(--muted-foreground); stroke-dasharray: 3 2; }
+.tm-graph .node.hot .dot { fill: color-mix(in srgb, var(--primary) 45%, var(--card)); }
+.tm-graph .node.selected .dot { fill: var(--primary); }
+.tm-graph .node .focus-ring { fill: none; stroke: none; stroke-width: 2.5; }
+.tm-graph .node:focus-visible .focus-ring { stroke: var(--ring); }
+.tm-graph .node text {
+  fill: var(--foreground); text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: var(--card); stroke-linejoin: round;
+}
+.tm-graph .node.external text { fill: var(--muted-foreground); }
+
+/* Dimmed, not hidden: each colour mixed 55% into the card keeps 3:1 or more against it. */
+.tm-graph { --dim-fg: color-mix(in srgb, var(--foreground) 55%, var(--card));
+  --dim-muted-fg: color-mix(in srgb, var(--muted-foreground) 55%, var(--card));
+  --dim-primary: color-mix(in srgb, var(--primary) 55%, var(--card)); }
+.tm-graph .edge.dim { stroke: var(--dim-muted-fg); }
+.tm-graph .arrow.dim { fill: var(--dim-muted-fg); }
+.tm-graph .node.dim .dot { stroke: var(--dim-primary); }
+.tm-graph .node.dim text { fill: var(--dim-fg); }
+.tm-graph .node.external.dim .dot { stroke: var(--dim-muted-fg); }
+.tm-graph .node.external.dim text { fill: var(--dim-muted-fg); }

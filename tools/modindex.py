@@ -8,11 +8,12 @@ modindex: validates TavernMods submissions and compiles the static index.
   build                 compile manifests/ and replacements.json into latest*.json
                         and repository.json (--ingest moves submissions in first,
                         --prune deletes them)
-  site                  bake tools/page.html with the mod list into site/index.html
+  site                  bake the built web/dist/index.html with the mod list into
+                        site/index.html
 
 paths default to submissions/. Rules: docs/REPO_STRUCTURE.md, which the
-launcher (tavern_shared/mods/), TavernLib (Backend/Mods/) and tools/builder.html
-implement too; change them together.
+launcher (tavern_shared/mods/), TavernLib (Backend/Mods/) and the manifest builder
+(web/src/builder/) implement too; change them together.
 """
 
 import argparse
@@ -1348,9 +1349,9 @@ def cmd_site(args):
     """Bake the mod list into the page. It reads manifests/, not
     repository.json, because the index doesn't carry screenshots."""
     root = repo_root(args.repo)
-    template_path = os.path.join(root, "tools", "page.html")
+    template_path = args.template or os.path.join(root, "web", "dist", "index.html")
     if not os.path.isfile(template_path):
-        raise ValidationError(f"no page template at {template_path}")
+        raise ValidationError(f"no page template at {template_path} (build it with npm run build in web/)")
     with open(template_path, encoding="utf-8") as f:
         template = f.read()
     if SITE_MARKER not in template:
@@ -1412,7 +1413,8 @@ def main(argv=None):
                    help="with --ingest, delete the moved submission files afterwards")
     b.set_defaults(func=cmd_build)
 
-    s = sub.add_parser("site", help="bake tools/page.html + the mod list into site/index.html")
+    s = sub.add_parser("site", help="bake web/dist/index.html + the mod list into site/index.html")
+    s.add_argument("--template", help="the built page to bake (default: web/dist/index.html)")
     s.add_argument("--out", help="output directory (default: site/)")
     s.add_argument("--owner", help="the index's GitHub owner, whose mods go first (default: from Actions or git)")
     s.set_defaults(func=cmd_site)

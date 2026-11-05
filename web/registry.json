@@ -1,0 +1,149 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "tavern",
+  "homepage": "https://moddingtavern.github.io/TavernMods/",
+  "items": [
+    {
+      "name": "tavern-theme",
+      "type": "registry:theme",
+      "title": "Tavern",
+      "description": "The Modding Tavern dark theme: TavernLauncher's warm palette, tuned to WCAG AA (every text colour 5:1 or more on every surface, 3:1 input borders, a solid focus ring), its fonts (Georgia headings, Segoe UI text, Consolas code), and colour-blind-safe chart and status colours.",
+      "cssVars": {
+        "theme": {
+          "font-sans": "\"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif",
+          "font-serif": "Georgia, \"Times New Roman\", serif",
+          "font-heading": "Georgia, \"Times New Roman\", serif",
+          "font-mono": "Consolas, \"Cascadia Mono\", \"SF Mono\", Menlo, monospace",
+          "color-destructive-foreground": "var(--destructive-foreground)",
+          "color-success": "var(--success)",
+          "color-warning": "var(--warning)",
+          "color-info": "var(--info)",
+          "color-chart-6": "var(--chart-6)",
+          "color-chart-7": "var(--chart-7)",
+          "color-chart-8": "var(--chart-8)",
+          "color-status-good": "var(--status-good)",
+          "color-status-warning": "var(--status-warning)",
+          "color-status-serious": "var(--status-serious)",
+          "color-status-critical": "var(--status-critical)"
+        },
+        "light": {
+          "background": "#15100d",
+          "foreground": "#ede3d1",
+          "card": "#1f1814",
+          "card-foreground": "#ede3d1",
+          "popover": "#271e19",
+          "popover-foreground": "#ede3d1",
+          "primary": "#f0b24a",
+          "primary-foreground": "#1d140c",
+          "secondary": "#33281f",
+          "secondary-foreground": "#ede3d1",
+          "muted": "#2b221c",
+          "muted-foreground": "#b8a78d",
+          "accent": "#3d3027",
+          "accent-foreground": "#ede3d1",
+          "destructive": "#f2877c",
+          "destructive-foreground": "#200d0a",
+          "success": "#8acb91",
+          "warning": "#e8c56a",
+          "info": "#80c8c1",
+          "border": "#3f3127",
+          "input": "#806952",
+          "ring": "#f0b24a",
+          "chart-1": "#3987e5",
+          "chart-2": "#d95926",
+          "chart-3": "#199e70",
+          "chart-4": "#c98500",
+          "chart-5": "#d55181",
+          "chart-6": "#008300",
+          "chart-7": "#9085e9",
+          "chart-8": "#e66767",
+          "status-good": "#0ca30c",
+          "status-warning": "#fab219",
+          "status-serious": "#ec835a",
+          "status-critical": "#d03b3b",
+          "radius": "0.5rem",
+          "sidebar": "#1f1814",
+          "sidebar-foreground": "#ede3d1",
+          "sidebar-primary": "#f0b24a",
+          "sidebar-primary-foreground": "#1d140c",
+          "sidebar-accent": "#3d3027",
+          "sidebar-accent-foreground": "#ede3d1",
+          "sidebar-border": "#3f3127",
+          "sidebar-ring": "#f0b24a"
+        },
+        "dark": {
+          "background": "#15100d",
+          "foreground": "#ede3d1",
+          "card": "#1f1814",
+          "card-foreground": "#ede3d1",
+          "popover": "#271e19",
+          "popover-foreground": "#ede3d1",
+          "primary": "#f0b24a",
+          "primary-foreground": "#1d140c",
+          "secondary": "#33281f",
+          "secondary-foreground": "#ede3d1",
+          "muted": "#2b221c",
+          "muted-foreground": "#b8a78d",
+          "accent": "#3d3027",
+          "accent-foreground": "#ede3d1",
+          "destructive": "#f2877c",
+          "destructive-foreground": "#200d0a",
+          "success": "#8acb91",
+          "warning": "#e8c56a",
+          "info": "#80c8c1",
+          "border": "#3f3127",
+          "input": "#806952",
+          "ring": "#f0b24a",
+          "chart-1": "#3987e5",
+          "chart-2": "#d95926",
+          "chart-3": "#199e70",
+          "chart-4": "#c98500",
+          "chart-5": "#d55181",
+          "chart-6": "#008300",
+          "chart-7": "#9085e9",
+          "chart-8": "#e66767",
+          "status-good": "#0ca30c",
+          "status-warning": "#fab219",
+          "status-serious": "#ec835a",
+          "status-critical": "#d03b3b",
+          "radius": "0.5rem",
+          "sidebar": "#1f1814",
+          "sidebar-foreground": "#ede3d1",
+          "sidebar-primary": "#f0b24a",
+          "sidebar-primary-foreground": "#1d140c",
+          "sidebar-accent": "#3d3027",
+          "sidebar-accent-foreground": "#ede3d1",
+          "sidebar-border": "#3f3127",
+          "sidebar-ring": "#f0b24a"
+        }
+      },
+      "css": {
+        "@layer base": {
+          "html": {
+            "color-scheme": "dark"
+          },
+          "body": {
+            "line-height": "1.6",
+            "-webkit-font-smoothing": "antialiased"
+          },
+          "h1, h2, h3, h4": {
+            "font-family": "var(--font-heading)",
+            "line-height": "1.25",
+            "text-wrap": "balance"
+          },
+          "code, kbd, pre, samp": {
+            "font-family": "var(--font-mono)"
+          },
+          ":focus-visible": {
+            "outline": "2px solid var(--ring)",
+            "outline-offset": "2px"
+          },
+          "::selection": {
+            "background-color": "color-mix(in oklab, var(--primary) 40%, transparent)",
+            "color": "var(--foreground)"
+          }
+        }
+      }
+    }
+  ]
+}
