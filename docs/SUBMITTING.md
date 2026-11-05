@@ -58,6 +58,21 @@ The old mod's manifests stay, so servers still running it can be joined, but it 
 | `fill-hashes [paths]` | Downloads every artifact and library and writes their `sha256`. | by hand |
 | `validate [paths] [--vt-max-malicious N] [--require-vt]` | The checks above, and `replacements.json`. Exits non-zero on failure. | `validate.yml`, on each PR that adds a submission or changes `replacements.json` |
 | `build [--ingest] [--prune]` | Compiles `manifests/` and `replacements.json` into the pointers and `repository.json`. `--ingest` first moves submissions into `manifests/`, re-checking their hashes and setting `package`; `--prune` deletes the moved files. | `publish.yml`, on merge to `main` |
-| `site [--out DIR] [--owner NAME]` | Bakes `tools/page.html` and the mod list into `site/index.html`, the owner's mods first. | `pages.yml`, after each build, which also publishes `tools/builder.html` |
+| `site [--template FILE] [--out DIR] [--owner NAME]` | Bakes the mod list into the built page (`web/dist/index.html` by default) and writes `site/index.html`, the owner's mods first. | `pages.yml`, after each build |
 
 `paths` defaults to `submissions/`.
+
+### The site
+
+The mod list and the manifest builder are a React app in [`web/`](../web/) (Vite, shadcn components, the Tavern theme from `web/registry.json`). It needs Node:
+
+```sh
+cd web
+npm ci
+npm run build      # both pages, plus the theme registry, into web/dist/
+cd ..
+python tools/modindex.py site
+cp -r web/dist/assets web/dist/builder.html web/dist/r site/
+```
+
+`npm run dev` serves it with an empty mod list. `pages.yml` does the above and deploys `site/`, so the builder is at `builder.html` and the theme at `r/tavern-theme.json` (`npx shadcn add https://moddingtavern.github.io/TavernMods/r/tavern-theme.json`).
