@@ -158,12 +158,13 @@
     }
   body {
     @apply bg-background text-foreground;
-    line-height: 1.6;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     }
   html {
     @apply font-sans;
     color-scheme: dark;
+    font-size: 87.5%;
     }
   h1, h2, h3, h4 {
     font-family: var(--font-heading);
