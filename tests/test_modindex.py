@@ -707,26 +707,52 @@ class Site(unittest.TestCase):
         for url, needle in bad.items():
             self.assertIn(needle, mi._screenshot_ok(url, "Owner", "Repo"), url)
 
+    @staticmethod
+    def _write_page(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("<script>window.MODS = /*__MODS__*/[];</script>")
+
+    @staticmethod
+    def _baked_rows(path):
+        with open(path, encoding="utf-8") as f:
+            page = f.read()
+        return page[page.index("= ") + 2:page.rindex(";")]
+
     def test_site_bakes_one_row_per_mod(self):
         root = temp_dir(self)
-        os.makedirs(os.path.join(root, "tools"))
-        with open(os.path.join(root, "tools", "page.html"), "w", encoding="utf-8") as f:
-            f.write("<script>const MODS = /*__MODS__*/[];</script>")
+        self._write_page(os.path.join(root, "web", "dist", "index.html"))   # what npm run build leaves
         shots = [f"https://github.com/Owner/Repo/releases/download/v1/{i}.png" for i in range(5)]
         for v, extra in (("1.0.0", {}), ("1.1.0", {"description": "</script>", "screenshots": shots})):
             m = manifest(version=v, **extra)
             m["artifacts"][0]["package"] = "dll"
             mi._write_json(os.path.join(root, "manifests", "Owner", "Repo", f"{v}.json"), m)
-        rc, out = run_quiet(mi.cmd_site, repo=root, out=None, owner=None)
+        rc, out = run_quiet(mi.cmd_site, repo=root, template=None, out=None, owner=None)
         self.assertEqual(rc, 0)
         self.assertIn("only the first 4", out)
-        with open(os.path.join(root, "site", "index.html"), encoding="utf-8") as f:
-            page = f.read()
-        data = page[page.index("= ") + 2:page.rindex(";")]
+        data = self._baked_rows(os.path.join(root, "site", "index.html"))
         self.assertNotIn("<", data)          # nothing can close the <script>
         rows = json.loads(data)
         self.assertEqual([(r["id"], r["latest"], r["description"], len(r["screenshots"]))
                           for r in rows], [("Owner.Repo", "1.1.0", "</script>", 4)])
+
+    def test_site_template_and_out(self):
+        root = temp_dir(self)
+        m = manifest()
+        m["artifacts"][0]["package"] = "dll"
+        mi._write_json(os.path.join(root, "manifests", "Owner", "Repo", "1.0.0.json"), m)
+        out_dir = os.path.join(root, "elsewhere")
+        site = ["--repo", root, "site", "--out", out_dir]
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+            # No built page yet: a clear error, not a traceback.
+            self.assertEqual(mi.main(site), 1)
+            self.assertIn("npm run build", err.getvalue())
+            template = os.path.join(root, "page.html")
+            self._write_page(template)
+            self.assertEqual(mi.main(site + ["--template", template, "--owner", "owner"]), 0)
+        rows = json.loads(self._baked_rows(os.path.join(out_dir, "index.html")))
+        self.assertEqual([(r["id"], r["own"]) for r in rows], [("Owner.Repo", True)])
+        self.assertFalse(os.path.exists(os.path.join(root, "site")))
 
 
 class FillHashes(unittest.TestCase):
