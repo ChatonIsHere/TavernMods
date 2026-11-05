@@ -9,7 +9,7 @@ const PAGES = [
 export function SiteHeader({ current }: { current: (typeof PAGES)[number]["key"] }) {
   return (
     <header className="border-b bg-card">
-      <nav aria-label="Site" className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
+      <nav aria-label="Site" className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
         <span className="font-heading text-lg font-bold text-primary">The Modding Tavern</span>
         <ul className="flex flex-wrap gap-x-1">
           {PAGES.map((p) => (

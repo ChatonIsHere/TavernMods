@@ -47,7 +47,7 @@ export function ModList() {
     <TooltipProvider>
       <SiteHeader current="mods" />
       <Tabs value={view} onValueChange={changeView} className="gap-0">
-        <main className="mx-auto w-full max-w-screen-2xl px-4 pt-6 pb-12 sm:px-6">
+        <main className="w-full px-4 pt-6 pb-12 sm:px-6">
           <div className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-5">
             <div className="min-w-0 flex-[1_1_24rem]">
               <h1 className="text-3xl font-bold text-primary">Community Mods</h1>
