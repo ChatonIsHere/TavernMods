@@ -74,6 +74,33 @@
           "0.3.0",
           "0.4.0"
         ]
+      },
+      "26": {
+        "name": "Canary",
+        "author": "ChatonIsHere",
+        "description": "Records what a server is doing, so there's something to look at when it lags, errors or crashes: lag spikes, errors by mod, players, entities and resource use, with a browser viewer.",
+        "parity_required": false,
+        "targets": [
+          "server"
+        ],
+        "versions": [
+          "26.11.3"
+        ]
+      }
+    },
+    "ChatonIsHere.Steady": {
+      "26": {
+        "name": "Steady",
+        "author": "ChatonIsHere",
+        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates and saves, and less memory held. Gameplay is unchanged.",
+        "parity_required": false,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "26.11.2"
+        ]
       }
     },
     "Circl-NoE.ATTMateriaLib": {

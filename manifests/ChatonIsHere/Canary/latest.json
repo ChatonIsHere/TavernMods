@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "id": "ChatonIsHere.Canary",
   "name": "Canary",
-  "version": "0.4.0",
+  "version": "26.11.3",
   "author": "ChatonIsHere",
   "description": "Records what a server is doing, so there's something to look at when it lags, errors or crashes: lag spikes, errors by mod, players, entities and resource use, with a browser viewer.",
   "parity_required": false,
@@ -12,8 +12,8 @@
       "targets": [
         "server"
       ],
-      "download_url": "https://github.com/ChatonIsHere/Canary/releases/download/v0.4.0/Canary.dll",
-      "sha256": "1807dcafceb40fdb5d0106a108ccab571ae161f6fa71be86ebcbef9e16237c55",
+      "download_url": "https://github.com/ChatonIsHere/Canary/releases/download/v26.11.3/Canary.dll",
+      "sha256": "ac2cbb25b927c77df326c6dec2eeddb06810b287215d49ca6cdb09c3468a191f",
       "package": "dll",
       "library_dependencies": []
     }

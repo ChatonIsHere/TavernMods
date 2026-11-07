@@ -14,6 +14,7 @@
       ],
       "download_url": "https://github.com/ChatonIsHere/Canary/releases/download/v26.11.3/Canary.dll",
       "sha256": "ac2cbb25b927c77df326c6dec2eeddb06810b287215d49ca6cdb09c3468a191f",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
