@@ -64,15 +64,15 @@ The old mod's manifests stay, so servers still running it can be joined, but it 
 
 ### The site
 
-The mod list and the manifest builder are a React app in [`web/`](../web/) (Vite, shadcn components, the Tavern theme from `web/registry.json`). It needs Node:
+The mod list, the server modlist page and the manifest builder are a React app in [`web/`](../web/) (Vite, shadcn components, the Tavern theme from `web/registry.json`). It needs Node:
 
 ```sh
 cd web
 npm ci
-npm run build      # both pages, plus the theme registry, into web/dist/
+npm run build      # the three pages, plus the theme registry, into web/dist/
 cd ..
 python tools/modindex.py site
-cp -r web/dist/assets web/dist/builder.html web/dist/r site/
+cp -r web/dist/assets web/dist/builder.html web/dist/modlist.html web/dist/r site/
 ```
 
-`npm run dev` serves it with an empty mod list. `pages.yml` does the above and deploys `site/`, so the builder is at `builder.html` and the theme at `r/tavern-theme.json` (`npx shadcn add https://moddingtavern.github.io/TavernMods/r/tavern-theme.json`).
+`npm run dev` serves it with an empty mod list. `pages.yml` does the above and deploys `site/`, so the builder is at `builder.html`, the modlist page at `modlist.html` and the theme at `r/tavern-theme.json` (`npx shadcn add https://moddingtavern.github.io/TavernMods/r/tavern-theme.json`).

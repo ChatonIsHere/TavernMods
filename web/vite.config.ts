@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
   build: {
     rollupOptions: {
-      input: { index: path.resolve(__dirname, "index.html"), builder: path.resolve(__dirname, "builder.html") },
+      input: { index: path.resolve(__dirname, "index.html"), builder: path.resolve(__dirname, "builder.html"), modlist: path.resolve(__dirname, "modlist.html") },
     },
   },
 })

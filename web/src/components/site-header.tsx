@@ -2,10 +2,11 @@ import { cn } from "@/lib/utils"
 
 const PAGES = [
   { key: "mods", href: "./", label: "Mods" },
+  { key: "modlist", href: "modlist.html", label: "Server modlist" },
   { key: "builder", href: "builder.html", label: "Manifest builder" },
 ] as const
 
-// The bar both pages share: the site's name and a link to each page.
+// The bar every page shares: the site's name and a link to each page.
 export function SiteHeader({ current }: { current: (typeof PAGES)[number]["key"] }) {
   return (
     <header className="border-b bg-card">
