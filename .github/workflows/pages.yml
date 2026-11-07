@@ -6,12 +6,18 @@ name: Publish page
 # committed.
 #
 # Chained after "Publish index" rather than sharing its trigger, so the page
-# never describes a mod the index build failed to write.
+# never describes a mod the index build failed to write. A change to the site
+# itself touches nothing that index build watches, so it deploys on its own push.
 
 on:
   workflow_run:
     workflows: ["Publish index"]
     types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
