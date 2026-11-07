@@ -3,6 +3,7 @@
 The default mod index for TavernLauncher: static JSON telling the launcher where each mod's files are (in the mod's own GitHub releases) and how to install them.
 
 - **Players:** nothing to set up. Open **Mod Manager → Get Mods** in the launcher. Other sources can be added under **Manage Sources**, but nobody reviews them, so only add ones you trust.
+- **Server hosts:** the [server modlist page](https://moddingtavern.github.io/TavernMods/modlist.html) makes the `modlist.json` that keeps a server's mods installed and up to date, for TavernLauncher's **Import Modlist** or a headless server.
 - **Mod authors:** [docs/SUBMITTING.md](docs/SUBMITTING.md) covers submitting a mod and updating it. The [manifest builder](https://moddingtavern.github.io/TavernMods/builder.html) writes the file for you.
 - **Maintainers:** to retire a mod in favour of another (a move to a new owner, say), list it in `replacements.json`; see [Replacing a mod](docs/SUBMITTING.md#replacing-a-mod). Launchers then offer players the switch.
 - **Hosting your own source:** serve the layout in [docs/REPO_STRUCTURE.md](docs/REPO_STRUCTURE.md) from any static host. Players add its base URL under **Manage Sources**; a headless server with `modmanager addrepo <url>`.

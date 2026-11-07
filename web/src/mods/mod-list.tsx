@@ -52,8 +52,8 @@ export function ModList() {
             <div className="min-w-0 flex-[1_1_24rem]">
               <h1 className="text-3xl font-bold text-primary">Community Mods</h1>
               <p className="mt-2 max-w-prose">
-                Install from <strong>Mod Manager → Get Mods</strong> in TavernLauncher. A headless server takes the same
-                ids in its <code className="text-info">modlist</code>. Mod authors:{" "}
+                Install from <strong>Mod Manager → Get Mods</strong> in TavernLauncher. For a server,{" "}
+                <a href="modlist.html" className="text-primary underline underline-offset-4">make its modlist</a>. Mod authors:{" "}
                 <a href="builder.html" className="text-primary underline underline-offset-4">build a manifest</a>.
               </p>
             </div>
