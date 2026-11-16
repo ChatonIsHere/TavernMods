@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  checks: write    # one check run per part of the validation, beside this job's own
 
 jobs:
   validate:
@@ -163,7 +164,7 @@ jobs:
         # Never fails here so the comment step runs; the last step fails the check.
         run: |
           set +e
-          python tools/modindex.py validate --require-vt --vt-max-malicious "${VT_MAX_MALICIOUS:-0}" \
+          python tools/modindex.py validate --require-vt --vt-max-malicious "${VT_MAX_MALICIOUS:-0}" --report report.json \
             > validate-output.txt 2>&1
           echo "rc=$?" >> "$GITHUB_OUTPUT"
           cat validate-output.txt
@@ -202,6 +203,47 @@ jobs:
               await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number: prNum, body });
+            }
+
+      # The required check is this job; these show what passed and what didn't at a glance.
+      - name: Show each part as its own check
+        if: always()
+        uses: actions/github-script@v9
+        env:
+          IS_FORK: ${{ steps.shape.outputs.fork }}
+        with:
+          script: |
+            const fs = require('fs');
+            const read = (f) => fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '';
+            const shapeProblems = read('shape-problems.txt');
+            const report = fs.existsSync('report.json') ? JSON.parse(read('report.json')) : {};
+            const checks = [];
+            const add = (name, conclusion, title, lines = []) => checks.push({ name, conclusion, title, lines });
+
+            if (process.env.IS_FORK !== 'true') add('One submission file', 'neutral', 'Not checked: opened from a branch of this repo');
+            else if (shapeProblems) add('One submission file', 'failure', 'The PR must add exactly one submission file', shapeProblems.split('\n'));
+            else add('One submission file', 'success', 'Adds one submission file');
+
+            const ownerProblem = read('owner-problems.txt'), submitter = read('submitter.txt');
+            if (shapeProblems) add('Submitter works on the mod', 'skipped', 'Skipped');
+            else if (ownerProblem) add('Submitter works on the mod', 'failure', 'Not someone who works on the mod', [ownerProblem]);
+            else if (process.env.IS_FORK !== 'true') add('Submitter works on the mod', 'neutral', 'Not checked: opened from a branch of this repo', [submitter]);
+            else add('Submitter works on the mod', 'success', submitter || 'Checked');
+
+            const names = { 'replacements.json': 'replacements.json is valid' };
+            const conclusion = { pass: 'success', fail: 'failure', skipped: 'skipped' };
+            for (const part of ['replacements.json', 'Manifest rules', 'Dependencies and libraries', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
+              const r = report[part] || { status: 'skipped', errors: [], notes: [] };
+              const title = r.status === 'fail' ? `${r.errors.length} problem${r.errors.length === 1 ? '' : 's'}` : r.status === 'pass' ? 'Passed' : 'Skipped';
+              add(names[part] || part, conclusion[r.status], title, [...r.errors.map((e) => 'FAIL ' + e), ...r.notes.map((n) => 'note ' + n)]);
+            }
+
+            const { owner, repo } = context.repo;
+            const head_sha = context.payload.pull_request.head.sha;
+            for (const c of checks) {
+              const summary = c.lines.filter(Boolean).map((l) => '- ' + l.replace(/`/g, "'")).join('\n') || c.title;
+              await github.rest.checks.create({ owner, repo, name: c.name, head_sha, status: 'completed', conclusion: c.conclusion,
+                output: { title: c.title.slice(0, 250), summary: summary.slice(0, 60000) } });
             }
 
       - name: Fail the check if anything failed
