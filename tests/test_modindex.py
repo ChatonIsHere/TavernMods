@@ -439,13 +439,57 @@ class Validate(unittest.TestCase):
         obj["sha256"] = hashlib.sha256(data).hexdigest()
         return obj
 
-    def validate(self, *manifests, vt_max_malicious=None):
+    def validate(self, *manifests, vt_max_malicious=None, report=None):
         paths = []
         for m in manifests:
             paths.append(os.path.join(self.root, "submissions", m["id"], f'{m["version"]}.json'))
             mi._write_json(paths[-1], m)
         return run_quiet(mi.cmd_validate, repo=self.root, paths=paths,
-                         vt_max_malicious=vt_max_malicious, require_vt=False)
+                         vt_max_malicious=vt_max_malicious, require_vt=False, report=report)
+
+    def report(self, *manifests):
+        path = os.path.join(self.root, "report.json")
+        rc, out = self.validate(*manifests, report=path)
+        with open(path, encoding="utf-8") as f:
+            return rc, out, json.load(f)
+
+    def test_report_has_each_part_with_what_it_confirmed(self):
+        stub(self, mi, "_urlopen", lambda url, timeout: contextlib.nullcontext(io.BytesIO(png(128))))
+        m = manifest(artifacts=[self.serve(artifact(library_dependencies=[self.serve(library(), b"MZ lib")]), b"MZ dll")],
+                     dependencies={"Other.Kit": "1.2.0"}, icons=[icon(128)])
+        rc, out, report = self.report(m)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(list(report), list(mi.REPORT_CHECKS))
+        self.assertEqual({k: v["status"] for k, v in report.items()},
+                         {"replacements.json": "skipped", "Manifest rules": "pass", "Dependencies and libraries": "pass",
+                          "Files match their hashes": "pass", "VirusTotal scan": "pass", "Icons": "pass"})
+        self.assertEqual(report["Manifest rules"]["title"], "Owner.Repo 1.0.0 follows the manifest rules")
+        self.assertIn("Version 1.0.0 is the first release of Owner.Repo", report["Manifest rules"]["ok"])
+        self.assertEqual(report["Dependencies and libraries"]["title"], "1 dependency, 1 library")
+        self.assertIn("Needs Other.Kit 1.2.0 or later, from another source", report["Dependencies and libraries"]["ok"])
+        self.assertEqual(report["Files match their hashes"]["title"], "2 files downloaded and verified")
+        self.assertEqual(report["VirusTotal scan"]["title"], "2 files clean")
+        self.assertTrue(all("VirusTotal" in n for n in report["VirusTotal scan"]["notes"]))
+        self.assertFalse([n for n in report["Files match their hashes"]["notes"] if "VirusTotal" in n])
+        self.assertEqual(report["Icons"]["ok"], ["Icon 128: a 128 x 128 px PNG"])
+        self.assertIn("  ok    Icon 128: a 128 x 128 px PNG", out)
+
+    def test_report_marks_what_failed_and_what_never_ran(self):
+        bad = self.serve(artifact(), b"MZ dll")
+        bad["sha256"] = "b" * 64
+        rc, out, report = self.report(manifest(artifacts=[bad]))
+        self.assertEqual(rc, 1)
+        self.assertEqual(report["Files match their hashes"]["status"], "fail")
+        self.assertIn("sha256 mismatch", report["Files match their hashes"]["errors"][0])
+        self.assertEqual(report["Files match their hashes"]["ok"], [])
+        self.assertEqual(report["VirusTotal scan"]["status"], "skipped")   # never got that far
+        self.assertEqual(report["Icons"]["status"], "skipped")             # none listed
+
+        rc, out, report = self.report(manifest(version="1.0"))
+        self.assertEqual(report["Manifest rules"]["status"], "fail")
+        self.assertEqual(report["Manifest rules"]["ok"], [])
+        self.assertEqual({k for k, v in report.items() if v["status"] == "skipped"},
+                         set(mi.REPORT_CHECKS) - {"Manifest rules"})
 
     def split(self, server_zip):
         return manifest(artifacts=[
