@@ -106,32 +106,35 @@ export function ModlistPage() {
                 const pick = picked.get(m.id)
                 const box = `pick-${m.id}`
                 return (
-                  <li key={m.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border bg-muted p-3 sm:p-4">
-                    <Checkbox id={box} checked={!!pick} onCheckedChange={(v) => toggle(m.id, v === true)} className="mt-1.5" />
-                    <ModIcon mod={m} size={48} />
-                    <div className="grid min-w-0 flex-[1_1_16rem] gap-1.5">
-                      <div className="flex flex-wrap items-baseline gap-x-3">
-                        <Label htmlFor={box} className="text-lg font-bold">{m.name}</Label>
-                        <code className="text-sm break-all text-muted-foreground">{m.id}</code>
+                  <li key={m.id} className="grid gap-3 rounded-lg border bg-muted p-3 sm:p-4">
+                    {/* The mod's icon, name, author and tags in one header; its description below, full width. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <Checkbox id={box} checked={!!pick} onCheckedChange={(v) => toggle(m.id, v === true)} />
+                      <ModIcon mod={m} size={56} />
+                      <div className="grid min-w-0 flex-[1_1_14rem] gap-1.5">
+                        <div className="flex flex-wrap items-baseline gap-x-3">
+                          <Label htmlFor={box} className="text-lg font-bold">{m.name}</Label>
+                          <code className="text-sm break-all text-muted-foreground">{m.id}</code>
+                        </div>
+                        <ModByline mod={m} />
+                        <ModBadges mod={m} />
                       </div>
-                      <ModByline mod={m} />
-                      {m.description && <p>{m.description}</p>}
-                      <ModBadges mod={m} />
+                      {pick && (
+                        <div className="grid gap-1.5">
+                          <Label htmlFor={`${versionId}-${m.id}`}>Version</Label>
+                          <select
+                            id={`${versionId}-${m.id}`}
+                            value={pick.version}
+                            onChange={(e) => setVersion(m.id, e.target.value)}
+                            className="h-9 rounded-lg border border-input bg-background px-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          >
+                            <option value="">Latest ({m.latest})</option>
+                            {m.versions.map((v) => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </div>
-                    {pick && (
-                      <div className="grid gap-1.5">
-                        <Label htmlFor={`${versionId}-${m.id}`}>Version</Label>
-                        <select
-                          id={`${versionId}-${m.id}`}
-                          value={pick.version}
-                          onChange={(e) => setVersion(m.id, e.target.value)}
-                          className="h-9 rounded-lg border border-input bg-background px-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                          <option value="">Latest ({m.latest})</option>
-                          {m.versions.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                    )}
+                    {m.description && <p>{m.description}</p>}
                   </li>
                 )
               })}
