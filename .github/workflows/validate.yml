@@ -6,12 +6,13 @@ name: Validate submissions
 # that can comment. That is only safe because nothing from the PR executes:
 # the checkout is main, only the PR's submissions/ is overlaid, and the
 # downloader refuses non-https URLs and non-public hosts, at every redirect.
+#
+# Runs on every PR, so the required checks never wait on one that doesn't
+# run. A PR that changes neither submissions/ nor replacements.json passes in
+# seconds, with each part skipped and no comment.
 
 on:
   pull_request_target:
-    paths:
-      - "submissions/**"
-      - "replacements.json"
 
 permissions:
   contents: read
@@ -32,13 +33,17 @@ jobs:
             const pr = context.payload.pull_request;
             const isFork = pr.head.repo && pr.head.repo.full_name !== pr.base.repo.full_name;
             core.setOutput('fork', isFork ? 'true' : 'false');
+            const { owner, repo } = context.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles,
+              { owner, repo, pull_number: pr.number, per_page: 100 });
+            if (!files.some(f => f.filename.startsWith('submissions/') || f.filename === 'replacements.json')) {
+              core.setOutput('none', 'true');   // nothing to validate: every later part is skipped
+              return;
+            }
             if (!isFork) {
               core.setOutput('ok', 'true');
               return;
             }
-            const { owner, repo } = context.repo;
-            const files = await github.paginate(github.rest.pulls.listFiles,
-              { owner, repo, pull_number: pr.number, per_page: 100 });
             const problems = [];
             const added = files.filter(f => f.status === 'added');
             if (files.length !== 1 || added.length !== 1) {
@@ -170,7 +175,7 @@ jobs:
           cat validate-output.txt
 
       - name: Post or update the PR comment
-        if: always()
+        if: always() && steps.shape.outputs.none != 'true'
         uses: actions/github-script@v9
         with:
           script: |
@@ -211,9 +216,21 @@ jobs:
         uses: actions/github-script@v9
         env:
           IS_FORK: ${{ steps.shape.outputs.fork }}
+          NONE: ${{ steps.shape.outputs.none }}
         with:
           script: |
             const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const head_sha = context.payload.pull_request.head.sha;
+            if (process.env.NONE === 'true') {
+              const title = 'Nothing to check: this PR changes no submission or replacements.json';
+              for (const name of ['One submission file', 'Submitter works on the mod', 'replacements.json is valid', 'Manifest rules',
+                'Dependencies and libraries', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
+                await github.rest.checks.create({ owner, repo, name, head_sha, status: 'completed', conclusion: 'skipped',
+                  output: { title, summary: title } });
+              }
+              return;
+            }
             const read = (f) => fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '';
             const shapeProblems = read('shape-problems.txt');
             const report = fs.existsSync('report.json') ? JSON.parse(read('report.json')) : {};
@@ -240,8 +257,6 @@ jobs:
                 [...r.errors.map((e) => 'FAIL ' + e), ...(r.ok || []).map((o) => 'OK ' + o), ...r.notes.map((n) => 'Note: ' + n)]);
             }
 
-            const { owner, repo } = context.repo;
-            const head_sha = context.payload.pull_request.head.sha;
             for (const c of checks) {
               const summary = c.lines.filter(Boolean).map((l) => '- ' + l.replace(/`/g, "'")).join('\n') || c.title;
               await github.rest.checks.create({ owner, repo, name: c.name, head_sha, status: 'completed', conclusion: c.conclusion,
@@ -251,6 +266,7 @@ jobs:
       - name: Fail the check if anything failed
         if: always()
         run: |
+          [ "${{ steps.shape.outputs.none }}" != "true" ] || { echo "No submission in this PR; nothing to check."; exit 0; }
           [ "${{ steps.shape.outputs.ok }}" = "true" ] || { echo "Single-file submission gate failed."; exit 1; }
           [ "${{ steps.owner.outputs.ok }}" != "false" ] || { echo "Submitter check failed."; exit 1; }
           [ "${{ steps.validate.outputs.rc }}" = "0" ] || { echo "Validation failed."; exit 1; }
