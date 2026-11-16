@@ -2,9 +2,23 @@
   "manifest_version": 2,
   "id": "ChatonIsHere.Steady",
   "name": "Steady",
-  "version": "26.11.2",
+  "version": "26.11.3",
   "author": "ChatonIsHere",
-  "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates and saves, and less memory held. Gameplay is unchanged.",
+  "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Gameplay is unchanged.",
+  "icons": [
+    {
+      "size": 128,
+      "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-128.png"
+    },
+    {
+      "size": 256,
+      "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-256.png"
+    },
+    {
+      "size": 512,
+      "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-512.png"
+    }
+  ],
   "parity_required": false,
   "dependencies": {},
   "artifacts": [
@@ -13,8 +27,8 @@
         "client_windows",
         "server"
       ],
-      "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.2/Steady.dll",
-      "sha256": "dd4133c9067714ff57c629284e73f4c54fce296bb19e1fe8ac2bde48b8b8ff5a",
+      "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.3/Steady.dll",
+      "sha256": "b2a6183c296cb58c79dd028fac3ae7c8f29f0f4a8a2a1cee681036e004e473cf",
       "package": "dll",
       "library_dependencies": []
     }
