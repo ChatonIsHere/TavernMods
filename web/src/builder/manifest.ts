@@ -152,7 +152,7 @@ export function problems(s: State, mods: IndexMods | null) {
     const n = `Build ${i + 1}`
     if (!a.targets.length) out.push(`${n} has no target ticked.`)
     for (const t of a.targets) {
-      if (t in claimed) out.push(`${n} and build ${claimed[t] + 1} both target ${t}; each target can have only one build.`)
+      if (t in claimed) out.push(`${n} and build ${claimed[t] + 1} both target ${t}. Each target can have only one build.`)
       else claimed[t] = i
     }
     if (!a.download_url) out.push(`${n} needs its release asset link.`)
@@ -215,7 +215,7 @@ const assetSha = (a: any) => (/^sha256:([0-9a-f]{64})$/.exec(a?.digest || "") ||
 async function gh(path: string) {
   const r = await fetch(`https://api.github.com/${path}`, { headers: { Accept: "application/vnd.github+json" } })
   if (r.status === 404) return null
-  if (!r.ok) throw new Error(r.status === 403 || r.status === 429 ? "GitHub's hourly limit for this network is used up; try again later" : `GitHub answered ${r.status}`)
+  if (!r.ok) throw new Error(r.status === 403 || r.status === 429 ? "GitHub's hourly limit for this network is used up. Try again later" : `GitHub answered ${r.status}`)
   return r.json()
 }
 
@@ -223,7 +223,7 @@ async function gh(path: string) {
 // what to tell the author. `reading` is called once the link looks right.
 export async function fillFromRelease(link: string, mods: IndexMods | null, reading: () => void): Promise<{ state?: State; status: string }> {
   const match = RELEASE_RE.exec(link)
-  if (!match) return { status: "That isn't a GitHub release link: …/releases/tag/<tag> or …/releases/download/<tag>/<file>." }
+  if (!match) return { status: "That isn't a GitHub release link. It should end in /releases/tag/<tag> or /releases/download/<tag>/<file>." }
   let [, owner, repo] = match
   const tag = decodeURIComponent(match[3] || match[4]), picked = match[5] && decodeURIComponent(match[5])
   const version = (tag.match(/\d+\.\d+\.\d+/) || [""])[0]

@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils"
 
 const PAGES = [
-  { key: "mods", href: "./", label: "Mods" },
-  { key: "modlist", href: "modlist.html", label: "Server modlist" },
-  { key: "builder", href: "builder.html", label: "Manifest builder" },
+  { key: "mods", href: "#mods", label: "Mods" },
+  { key: "modlist", href: "#modlist", label: "Server modlist" },
+  { key: "builder", href: "#builder", label: "Manifest builder" },
 ] as const
 
 // The bar every page shares: the site's name and a link to each page.

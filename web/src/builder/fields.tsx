@@ -131,7 +131,7 @@ export function HashButton({ what, onHash }: { what: string; onHash: (sha: strin
   return (
     <div className="grid gap-1">
       <Button type="button" variant="outline" className="w-fit" aria-label={`Hash a file for ${what}`} onClick={() => input.current?.click()}>
-        Hash a file…
+        Hash a file
       </Button>
       <input
         ref={input}
