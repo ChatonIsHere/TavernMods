@@ -107,14 +107,29 @@
       "26": {
         "name": "Steady",
         "author": "ChatonIsHere",
-        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates and saves, and less memory held. Gameplay is unchanged.",
+        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Gameplay is unchanged.",
+        "icons": [
+          {
+            "size": 128,
+            "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-128.png"
+          },
+          {
+            "size": 256,
+            "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-256.png"
+          },
+          {
+            "size": 512,
+            "url": "https://raw.githubusercontent.com/ChatonIsHere/Steady/8456d2898c1df1fcca1ff87f7a140cc1dd2404dd/assets/badge-512.png"
+          }
+        ],
         "parity_required": false,
         "targets": [
           "client_windows",
           "server"
         ],
         "versions": [
-          "26.11.2"
+          "26.11.2",
+          "26.11.3"
         ]
       }
     },
