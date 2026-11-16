@@ -17,12 +17,14 @@ import {
 const DOCS = `https://github.com/${INDEX.owner}/${INDEX.repo}/blob/${INDEX.branch}/docs/SUBMITTING.md`
 const FORK = `https://github.com/${INDEX.owner}/${INDEX.repo}/fork`
 
+// The username is remembered for good; the draft only for this tab, so a closed tab starts clean.
 const stored = (key: string) => { try { return localStorage.getItem(key) } catch { return null } }
 const store = (key: string, value: string) => { try { localStorage.setItem(key, value) } catch { /* storage blocked */ } }
+const DRAFT = "builder-draft"
 
 function savedDraft(): State {
   try {
-    const draft = JSON.parse(stored("builder-draft") || "null")
+    const draft = JSON.parse(sessionStorage.getItem(DRAFT) || "null")
     if (draft && Array.isArray(draft.artifacts)) return { ...blankState(), ...draft }
   } catch { /* no draft */ }
   return blankState()
@@ -48,7 +50,7 @@ export function Builder() {
     return next
   })
 
-  useEffect(() => { store("builder-draft", JSON.stringify(state)) }, [state])
+  useEffect(() => { try { sessionStorage.setItem(DRAFT, JSON.stringify(state)) } catch { /* storage blocked */ } }, [state])
   useEffect(() => {
     fetch(`${RAW}/repository.json`, { cache: "no-store" })
       .then((r) => r.json())
@@ -179,6 +181,13 @@ export function Builder() {
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={loadPublished}>Load published manifest</Button>
                 <Button type="button" variant="outline" onClick={() => loadFile.current?.click()}>Load a manifest file</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setState(blankState())
+                  setReleaseUrl("")
+                  setReleaseStatus("")
+                  setOutStatus("")
+                  setLoadStatus("Started over.")
+                }}>Start over</Button>
                 <input
                   ref={loadFile}
                   type="file"

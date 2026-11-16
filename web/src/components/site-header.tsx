@@ -20,7 +20,8 @@ export function SiteHeader({ current }: { current: (typeof PAGES)[number]["key"]
                 aria-current={p.key === current ? "page" : undefined}
                 className={cn(
                   "inline-flex min-h-8 items-center rounded-md px-2 underline-offset-4 hover:underline",
-                  p.key === current ? "font-semibold text-foreground underline" : "text-muted-foreground hover:text-foreground",
+                  // Same weight either way, so picking a page doesn't shift its neighbours.
+                  p.key === current ? "text-foreground underline decoration-primary decoration-2" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {p.label}
