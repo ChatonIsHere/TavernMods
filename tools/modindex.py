@@ -21,6 +21,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import posixpath
 import re
 import socket
 import subprocess
@@ -1081,20 +1082,43 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
     return errs, warns
 
 
+def _rules_confirmed(m, known):
+    published = sorted(known.get(m["id"], {}), key=_vkey)
+    major = m["version"].split(".")[0]
+    in_major = [v for v in published if v.split(".")[0] == major]
+    if in_major:
+        place = f"comes after {in_major[-1]}, the highest published {major}.x"
+    elif published:
+        place = f"starts major {major} (the newest published is {published[-1]})"
+    else:
+        place = f"is the first release of {m['id']}"
+    scenes = m.get("scenes")
+    return [f"{m['id']} is a valid GitHub owner.repo, and not replaced",
+            f"Version {m['version']} {place}",
+            f"Targets: {', '.join(manifest_targets(m))}. parity_required: {str(m['parity_required']).lower()}. "
+            f"Scenes: {', '.join(scenes) if scenes else 'all'}"]
+
+
 REPORT_CHECKS = ("replacements.json", "Manifest rules", "Dependencies and libraries",
                  "Files match their hashes", "VirusTotal scan", "Icons")
 
 
 def cmd_validate(args):
     """--report FILE also writes each check's outcome as JSON: {check: {"status": "pass" | "fail" |
-    "skipped", "errors": [...], "notes": [...]}}, for the workflow to show as separate checks."""
-    report = {c: {"status": "skipped", "errors": [], "notes": []} for c in REPORT_CHECKS}
+    "skipped", "title", "errors", "notes", "ok": what it confirmed}}, for the workflow to show as
+    separate checks."""
+    report = {c: {"status": "skipped", "title": "", "errors": [], "notes": [], "ok": []} for c in REPORT_CHECKS}
 
-    def record(check, errs, notes=(), who=""):
+    def record(check, errs, notes=(), who="", ok=(), title=""):
         r = report[check]
         r["errors"] += [f"{who}{e}" for e in errs]
         r["notes"] += [f"{who}{n}" for n in notes]
         r["status"] = "fail" if r["errors"] else "pass"
+        if not errs:
+            r["ok"] += [f"{who}{o}" for o in ok]
+            for o in ok:
+                print(f"  ok    {who}{o}")
+            r["title"] = r["title"] or title
 
     try:
         return _validate(args, record)
@@ -1120,8 +1144,12 @@ def _validate(args, record):
         print(f"== {REPLACEMENTS_FILE} ==")
         # A replacement may name a mod submitted in the same PR.
         both = {i: {**known.get(i, {}), **submitted.get(i, {})} for i in set(known) | set(submitted)}
-        errs = validate_replacements(load_replacements(root), both)
-        record("replacements.json", errs)
+        all_reps = load_replacements(root)
+        errs = validate_replacements(all_reps, both)
+        record("replacements.json", errs,
+               ok=[f"{old} is replaced by {r['by']}, which is published or submitted" for old, r in sorted(all_reps.items())]
+               or ["No replacements listed"],
+               title=f"{len(all_reps)} replacement{'' if len(all_reps) == 1 else 's'}, all valid")
         for e in errs:
             print(f"  FAIL  {e}")
         if not errs:
@@ -1161,15 +1189,22 @@ def _validate(args, record):
                             f"both would install to one folder")
         if not errs and (floor := version_floor_error(m, known)):
             errs = [floor]
-        record("Manifest rules", errs, who=who)
+        record("Manifest rules", errs, who=who, ok=errs or _rules_confirmed(m, known),
+               title=f"{m.get('id')} {m.get('version')} follows the manifest rules")
         if not errs:
             errs, warns = validate_dependency_targets(m, known)
             lib_errs, lib_warns = library_problems(m, known)
             errs += lib_errs
             warns += lib_warns
-            record("Dependencies and libraries", errs, warns, who)
+            deps = m["dependencies"]
+            libs = {lib["filename"]: lib["sha256"] for a in m["artifacts"] for lib in a["library_dependencies"]}
+            record("Dependencies and libraries", errs, warns, who,
+                   ok=[f"Needs {d} {v} or later{'' if d in known else ', from another source'}" for d, v in sorted(deps.items())]
+                   + [f"Library {f}, sha256 {sha[:12]}..." for f, sha in sorted(libs.items())]
+                   or ["No dependencies or libraries"],
+                   title=f"{len(deps)} dependenc{'y' if len(deps) == 1 else 'ies'}, {len(libs)} librar{'y' if len(libs) == 1 else 'ies'}")
         if not errs:
-            file_errs, file_warns, vt_errs, vt_warns = [], [], [], []
+            file_errs, file_warns, vt_errs, vt_warns, verified = [], [], [], [], []
             for i, art in enumerate(m["artifacts"]):
                 label = f"artifacts[{i}] ({'+'.join(art['targets'])})"
                 checks = [(art, label, True)] + [
@@ -1181,13 +1216,21 @@ def _validate(args, record):
                                        args.require_vt, vt=(vt_errs, vt_warns))
                     file_errs += e
                     file_warns += w
-            record("Files match their hashes", file_errs, file_warns, who)
+                    if not e:
+                        verified.append(f"{what}: {posixpath.basename(urlparse(obj['download_url']).path)} "
+                                        f"downloaded, sha256 {obj['sha256'][:12]}... matches")
+            record("Files match their hashes", file_errs, file_warns, who, ok=verified,
+                   title=f"{len(verified)} file{'' if len(verified) == 1 else 's'} downloaded and verified")
             if vt_errs or vt_warns:
-                record("VirusTotal scan", vt_errs, vt_warns, who)
+                clean = sum(1 for n in vt_warns if "VirusTotal clean" in n)
+                record("VirusTotal scan", vt_errs, vt_warns, who,
+                       title=f"{clean} file{'' if clean == 1 else 's'} clean" if clean else "Not scanned")
             icon_errs = [f"icon {icon['size']}: {problem}" for icon in m.get("icons") or []
                          if (problem := icon_problem(icon["url"], icon["size"]))]
             if m.get("icons"):
-                record("Icons", icon_errs, who=who)
+                icons = sorted(i["size"] for i in m["icons"])
+                record("Icons", icon_errs, who=who, ok=[f"Icon {n}: a {n} x {n} px PNG" for n in icons],
+                       title=f"{len(icons)} icon{'' if len(icons) == 1 else 's'}, each the size it says")
             errs = file_errs + vt_errs + icon_errs
             warns += file_warns + vt_warns
 

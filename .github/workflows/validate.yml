@@ -233,9 +233,11 @@ jobs:
             const names = { 'replacements.json': 'replacements.json is valid' };
             const conclusion = { pass: 'success', fail: 'failure', skipped: 'skipped' };
             for (const part of ['replacements.json', 'Manifest rules', 'Dependencies and libraries', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
-              const r = report[part] || { status: 'skipped', errors: [], notes: [] };
-              const title = r.status === 'fail' ? `${r.errors.length} problem${r.errors.length === 1 ? '' : 's'}` : r.status === 'pass' ? 'Passed' : 'Skipped';
-              add(names[part] || part, conclusion[r.status], title, [...r.errors.map((e) => 'FAIL ' + e), ...r.notes.map((n) => 'note ' + n)]);
+              const r = report[part] || { status: 'skipped', errors: [], notes: [], ok: [] };
+              const title = r.status === 'fail' ? `${r.errors.length} problem${r.errors.length === 1 ? '' : 's'}`
+                : r.status === 'pass' ? (r.title || 'Passed') : 'Skipped: an earlier part failed, or there was nothing to check';
+              add(names[part] || part, conclusion[r.status], title,
+                [...r.errors.map((e) => 'FAIL ' + e), ...(r.ok || []).map((o) => 'OK ' + o), ...r.notes.map((n) => 'Note: ' + n)]);
             }
 
             const { owner, repo } = context.repo;
