@@ -31,6 +31,16 @@ export const text = (s: unknown) => String(s ?? "")
 
 const hasTarget = (m: Mod, t: string) => (m.targets || []).includes(t)
 
+// What players and hosts call each target, for the filter and the tags.
+export const PLATFORMS = [
+  { target: "client_windows", label: "PCVR" },
+  { target: "client_android", label: "Quest" },
+  { target: "server", label: "Server" },
+] as const
+
+// Whether m has a build for any of the targets; true when none are picked.
+export const runsOn = (m: Mod, targets: string[]) => !targets.length || targets.some((t) => hasTarget(m, t))
+
 // Parity is only enforced on a mod a server runs that also has a client build.
 const parityApplies = (m: Mod) =>
   m.parity_required && hasTarget(m, "server") && (hasTarget(m, "client_windows") || hasTarget(m, "client_android"))
@@ -44,7 +54,7 @@ export interface Tag {
 
 const TAGS: (Tag & { shown: (m: Mod) => boolean })[] = [
   {
-    key: "windows", label: "Windows", className: "border-info text-info", shown: (m) => hasTarget(m, "client_windows"),
+    key: "windows", label: "PCVR", className: "border-info text-info", shown: (m) => hasTarget(m, "client_windows"),
     explain: "Has a build for the game on Windows: SteamVR, a Quest over Link, or flycam.",
   },
   {
@@ -52,8 +62,8 @@ const TAGS: (Tag & { shown: (m: Mod) => boolean })[] = [
     explain: "Has a build for game servers.",
   },
   {
-    key: "android", label: "Android", className: "border-chart-7 text-chart-7", shown: (m) => hasTarget(m, "client_android"),
-    explain: "Has a build for the standalone Quest headset (Android). Nothing installs these yet.",
+    key: "android", label: "Quest", className: "border-chart-7 text-chart-7", shown: (m) => hasTarget(m, "client_android"),
+    explain: "Has a build for the standalone Quest headset, not over Link. Nothing installs these yet.",
   },
   {
     key: "parity", label: "Parity", className: "border-destructive text-destructive", shown: parityApplies,

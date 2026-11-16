@@ -1,4 +1,4 @@
-import { iconUrl, type Mod, MODS, text } from "@/lib/mods"
+import { iconUrl, type Mod, MODS, runsOn, text } from "@/lib/mods"
 
 export interface GNode {
   id: string
@@ -98,8 +98,10 @@ let graph: Graph | null = null
 export const getGraph = () => (graph ??= build(MODS))
 export const keepSelection = (n: GNode | null) => { getGraph().selected = n }
 
-export const nodeMatches = (n: GNode, query: string) =>
-  !query || `${n.id} ${n.label} ${text(n.mod?.author)}`.toLowerCase().includes(query)
+// A dependency from outside this index has no targets to filter on, so a platform filter leaves it out.
+export const nodeMatches = (n: GNode, query: string, targets: string[] = []) =>
+  (!query || `${n.id} ${n.label} ${text(n.mod?.author)}`.toLowerCase().includes(query))
+  && (!targets.length || (!!n.mod && runsOn(n.mod, targets)))
 
 // Everything reachable from start by next, start itself excluded.
 export function closure(start: GNode, next: (n: GNode) => GNode[]) {

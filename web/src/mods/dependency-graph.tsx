@@ -10,7 +10,7 @@ import "./graph.css"
 
 const LABEL_PX = 14 // labels draw at this size on screen, whatever the zoom
 
-export function DependencyGraph({ query }: { query: string }) {
+export function DependencyGraph({ query, targets }: { query: string; targets: string[] }) {
   const g = getGraph()
   const svgRef = useRef<SVGSVGElement>(null)
   const viewportRef = useRef<SVGGElement>(null)
@@ -216,7 +216,7 @@ export function DependencyGraph({ query }: { query: string }) {
     hot = (e) => ((e.from === focus || up.has(e.from)) && up.has(e.to))
       || ((e.to === focus || down.has(e.to)) && down.has(e.from))
   } else {
-    lit = new Set(g.nodes.filter((n) => nodeMatches(n, query)))
+    lit = new Set(g.nodes.filter((n) => nodeMatches(n, query, targets)))
   }
 
   const onKeyDown = (ev: KeyboardEvent) => {
