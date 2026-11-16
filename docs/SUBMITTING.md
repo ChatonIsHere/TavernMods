@@ -3,7 +3,7 @@
 ## Submitting
 
 1. Publish each build as a release asset on your mod's GitHub repo, at a tag: one `.dll`, or a `.zip` when it has several DLLs or asset bundles. One file can serve several targets (`client_windows`, `server`, `client_android`). Link to it as `https://github.com/<owner>/<repo>/releases/download/<tag>/<file>`, and never replace the file afterwards.
-2. Write the manifest. The easiest way is the [manifest builder](https://moddingtavern.github.io/TavernMods/builder.html), which checks it as you type. Paste your release link at the top and it fills in the id, version, build links and hashes. Or copy [`submissions/TEMPLATE.json`](../submissions/TEMPLATE.json) and fill it in by hand, following [REPO_STRUCTURE.md](REPO_STRUCTURE.md): one `artifacts` entry per build, and leave out `package`.
+2. Write the manifest. The easiest way is the [manifest builder](https://moddingtavern.github.io/TavernMods/#builder), which checks it as you type. Paste your release link at the top and it fills in the id, version, build links and hashes. Or copy [`submissions/TEMPLATE.json`](../submissions/TEMPLATE.json) and fill it in by hand, following [REPO_STRUCTURE.md](REPO_STRUCTURE.md): one `artifacts` entry per build, and leave out `package`.
 3. Fill in each build's and library's `sha256` from the exact file you uploaded: the builder's **Hash a file** button does it, or `python tools/modindex.py fill-hashes submissions/<owner>.<repo>/<version>.json` downloads every file and writes them in.
 4. Open a pull request that adds only `submissions/<owner>.<repo>/<version>.json`. Only maintainers can add files here directly, so fork this repo first. The builder's **Add to your fork** button then opens the file in your fork, ready to commit to a new branch and propose as a pull request. The checks post their result as a comment and re-run on every push.
 5. A maintainer reviews and merges, and the index rebuilds itself.
@@ -19,6 +19,7 @@ Publish a new release with a higher version, then submit it as above at `submiss
 On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fails if:
 
 - it comes from a fork and does anything other than add one file, or that file isn't at `submissions/<id>/<version>.json` for its own id and version;
+- it comes from a fork and whoever opened it isn't the mod's owner, the publisher of one of its releases, a public member of the owning organisation or a contributor to its repo. A maintainer can still merge it after checking the owner agrees;
 - its version is already published, or is lower than the highest published version in its major. A fix to an older major is fine, but a new major can't start below the newest version;
 - its id, or a dependency's id, has been replaced (see below), or its id differs only in case from a published or replaced one;
 - its `id`, or a dependency's id, isn't a valid GitHub `owner.repo`, or it depends on itself;
@@ -77,4 +78,4 @@ python tools/modindex.py site
 cp -r web/dist/assets web/dist/builder.html web/dist/modlist.html web/dist/r site/
 ```
 
-`npm run dev` serves it with an empty mod list. `pages.yml` does the above and deploys `site/`, so the builder is at `builder.html`, the modlist page at `modlist.html` and the theme at `r/tavern-theme.json` (`npx shadcn add https://moddingtavern.github.io/TavernMods/r/tavern-theme.json`).
+`npm run dev` serves it with an empty mod list. `pages.yml` does the above and deploys `site/`. The site is one page: the mod list at the root, the server modlist page at `#modlist` and the builder at `#builder`. `builder.html` and `modlist.html` redirect there for old links. The theme is at `r/tavern-theme.json` (`npx shadcn add https://moddingtavern.github.io/TavernMods/r/tavern-theme.json`).

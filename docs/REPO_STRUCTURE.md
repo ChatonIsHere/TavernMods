@@ -247,7 +247,7 @@ A folder with neither file isn't reported. Folders starting with `.` or `~` are 
 | Join handshake | in `mods`, enforced | in `untracked`, advisory, never blocks |
 | Exported modlist | in `mods` | in `untracked`, listed, never installed |
 
-- **Toggling** a folder renames `manifest.json` ⇄ `manifest.disabled.json`; the file is never read or rewritten. A loose dll is renamed `X.dll` ⇄ `X.dll.disabled` and always named by `X.dll`; if both names exist, the toggle is refused. Either takes effect at the next game or server start.
+- **Toggling** a folder renames `manifest.json` to `manifest.disabled.json` and back, and the file is never read or rewritten. A loose dll is renamed `X.dll` to `X.dll.disabled` and back, and always named by `X.dll`; if both names exist, the toggle is refused. Either takes effect at the next game or server start.
 - **Nothing automatic enables or disables an untracked mod**, with one exception: a loose `Mods/<name>.dll` with the same filename as a DLL an install just placed is disabled by the same rename, so MelonLoader doesn't load the mod twice.
 - **Exported modlist:** each `mods` entry is `id` (its latest) or `id@version`. Enabled untracked mods go under a top-level `untracked` key as `{name, kind}`, never in `mods`. An importer shows them and installs nothing from them, and importing never disables the importer's own untracked mods.
 
@@ -264,4 +264,4 @@ A source can retire a mod in favour of another, for example when it moves to a n
 
 ## Displaced folders
 
-Installing a mod whose `Mods/<id>/` exists but isn't ours moves that folder to `Mods/.displaced/<id>/` (suffixed `.2`, `.3`, … if taken), logs the move, and installs. This applies to every install, including the launcher restoring a cached version. Nothing loads or lists `.displaced/`; clearing it is up to you.
+Installing a mod whose `Mods/<id>/` exists but isn't ours moves that folder to `Mods/.displaced/<id>/` (suffixed `.2`, `.3` and so on if taken), logs the move, and installs. This applies to every install, including the launcher restoring a cached version. Nothing loads or lists `.displaced/`; clearing it is up to you.

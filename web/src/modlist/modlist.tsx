@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { CircleAlertIcon, CircleCheckIcon } from "lucide-react"
 
+import { Pager } from "@/components/pager"
+import { usePage } from "@/lib/pages"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -20,7 +22,7 @@ const CONTAINER = "https://github.com/ModdingTavern/a-township-container"
 
 function savedPicks(): Pick[] {
   try {
-    const draft = JSON.parse(localStorage.getItem("modlist-draft") || "null")
+    const draft = JSON.parse(sessionStorage.getItem("modlist-draft") || "null")
     if (Array.isArray(draft)) return draft.filter((p) => typeof p?.id === "string").map((p) => ({ id: p.id, version: String(p.version || "") }))
   } catch { /* no draft, or storage blocked */ }
   return []
@@ -48,7 +50,8 @@ export function ModlistPage() {
   useEffect(() => {
     fetchRepository().then(setRepo).catch((e) => setRepoError(`Couldn't load the mod list: ${(e as Error).message}. Reload to try again.`))
   }, [])
-  useEffect(() => { try { localStorage.setItem("modlist-draft", JSON.stringify(picks)) } catch { /* storage blocked */ } }, [picks])
+  // Only for this tab, like the builder's draft.
+  useEffect(() => { try { sessionStorage.setItem("modlist-draft", JSON.stringify(picks)) } catch { /* storage blocked */ } }, [picks])
   useEffect(() => {
     let live = true
     dependencyClosure(picks, new Set(Object.keys(repo?.mods || {}))).then((n) => { if (live) setNeeded(n) })
@@ -61,6 +64,7 @@ export function ModlistPage() {
   const nameOf = (id: string) => byId.get(id)?.name || id
   const q = query.trim().toLowerCase()
   const shown = q ? mods.filter((m) => `${m.id} ${m.name} ${m.author} ${m.description}`.toLowerCase().includes(q)) : mods
+  const paged = usePage(shown, 25, q)
 
   const issues = problems(picks, mods, repo)
   const text = modlistText(picks)
@@ -75,7 +79,7 @@ export function ModlistPage() {
   const setVersion = (id: string, version: string) => setPicks((prev) => prev.map((p) => (p.id === id ? { ...p, version } : p)))
   const copy = async (value: string, what: string) => {
     try { await navigator.clipboard.writeText(value); setOutStatus(`Copied ${what}.`) }
-    catch { setOutStatus("Couldn't copy; select the text instead.") }
+    catch { setOutStatus("Couldn't copy. Select the text and copy it yourself.") }
   }
 
   return (
@@ -85,58 +89,62 @@ export function ModlistPage() {
         <div className="mb-6 border-b pb-5">
           <h1 className="text-3xl font-bold text-primary">Server Modlist</h1>
           <p className="mt-2 max-w-prose">
-            Pick the mods a server should run and download its <code className="text-info">{FILE_NAME}</code>. Each time
-            the server starts it installs and updates those mods and their dependencies, and turns off any other mod it
-            manages. It's the file TavernLauncher's Mod Manager exports, so it imports there too.
+            Pick the mods a server should run, then download its <code className="text-info">{FILE_NAME}</code>. Every
+            time the server starts, it installs or updates those mods and their dependencies and turns off any other mod
+            it manages. TavernLauncher's Mod Manager exports and imports the same file.
           </p>
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
           <Section
             title="Mods with a server build"
-            hint={<>Tick each mod the server should run; you don't need to tick their dependencies. Latest updates the mod
-              whenever the server starts; a version keeps it there.</>}
+            hint={<>Tick each mod the server should run. Their dependencies come with them, so there's no need to tick
+              those. Leave a mod on Latest to update it at every start, or pick a version to keep it there.</>}
           >
-            <Field label="Search" value={query} onChange={setQuery} placeholder="Mods, authors, ids…" />
+            <Field label="Search" value={query} onChange={setQuery} placeholder="Name, author or id" />
             <p className="text-sm text-muted-foreground" aria-live="polite">
-              {repo ? `${shown.length} of ${plural(mods.length, "mod")}` : repoError || "Loading the mod list…"}
+              {repo ? `${shown.length} of ${plural(mods.length, "mod")}` : repoError || "Loading the mod list."}
             </p>
             <ul className="grid gap-3">
-              {shown.map((m) => {
+              {paged.items.map((m) => {
                 const pick = picked.get(m.id)
                 const box = `pick-${m.id}`
                 return (
-                  <li key={m.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border bg-muted p-3 sm:p-4">
-                    <Checkbox id={box} checked={!!pick} onCheckedChange={(v) => toggle(m.id, v === true)} className="mt-1.5" />
-                    <ModIcon mod={m} size={48} />
-                    <div className="grid min-w-0 flex-[1_1_16rem] gap-1.5">
-                      <div className="flex flex-wrap items-baseline gap-x-3">
-                        <Label htmlFor={box} className="text-lg font-bold">{m.name}</Label>
-                        <code className="text-sm break-all text-muted-foreground">{m.id}</code>
+                  <li key={m.id} className="grid gap-3 rounded-lg border bg-muted p-3 sm:p-4">
+                    {/* The mod's icon, name, author and tags in one header; its description below, full width. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <Checkbox id={box} checked={!!pick} onCheckedChange={(v) => toggle(m.id, v === true)} />
+                      <ModIcon mod={m} size={56} />
+                      <div className="grid min-w-0 flex-[1_1_14rem] gap-1.5">
+                        <div className="flex flex-wrap items-baseline gap-x-3">
+                          <Label htmlFor={box} className="text-lg font-bold">{m.name}</Label>
+                          <code className="text-sm break-all text-muted-foreground">{m.id}</code>
+                        </div>
+                        <ModByline mod={m} />
+                        <ModBadges mod={m} />
                       </div>
-                      <ModByline mod={m} />
-                      {m.description && <p>{m.description}</p>}
-                      <ModBadges mod={m} />
+                      {pick && (
+                        <div className="grid gap-1.5">
+                          <Label htmlFor={`${versionId}-${m.id}`}>Version</Label>
+                          <select
+                            id={`${versionId}-${m.id}`}
+                            value={pick.version}
+                            onChange={(e) => setVersion(m.id, e.target.value)}
+                            className="h-9 rounded-lg border border-input bg-background px-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          >
+                            <option value="">Latest ({m.latest})</option>
+                            {m.versions.map((v) => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </div>
-                    {pick && (
-                      <div className="grid gap-1.5">
-                        <Label htmlFor={`${versionId}-${m.id}`}>Version</Label>
-                        <select
-                          id={`${versionId}-${m.id}`}
-                          value={pick.version}
-                          onChange={(e) => setVersion(m.id, e.target.value)}
-                          className="h-9 rounded-lg border border-input bg-background px-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                          <option value="">Latest ({m.latest})</option>
-                          {m.versions.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                    )}
+                    {m.description && <p>{m.description}</p>}
                   </li>
                 )
               })}
             </ul>
-            {repo && q && !shown.length && <p className="text-muted-foreground">Nothing here matches that.</p>}
+            <Pager {...paged} />
+            {repo && q && !shown.length && <p className="text-muted-foreground">No mods match that search.</p>}
           </Section>
 
           <aside aria-labelledby="out-title" className="lg:sticky lg:top-4">
@@ -193,7 +201,7 @@ export function ModlistPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={!picks.length} onClick={() => { download(text); setOutStatus(`Saved ${FILE_NAME}.`) }}>Download</Button>
                   <Button type="button" variant="outline" disabled={!picks.length} onClick={() => copy(text, "the file")}>Copy</Button>
-                  <Button type="button" variant="outline" disabled={!repo} onClick={() => loadFile.current?.click()}>Load a modlist…</Button>
+                  <Button type="button" variant="outline" disabled={!repo} onClick={() => loadFile.current?.click()}>Load a modlist</Button>
                   <Button type="button" variant="outline" disabled={!picks.length} onClick={() => { setPicks([]); setOutStatus("Cleared.") }}>Clear</Button>
                   <input
                     ref={loadFile}
@@ -219,11 +227,11 @@ export function ModlistPage() {
                 <div className="grid gap-2">
                   <h3 className="font-heading text-lg font-bold">Where it goes</h3>
                   <ul className="grid list-disc gap-2 pl-5">
-                    <li>A server TavernLauncher runs: <strong>Mod Manager → Import Modlist</strong>.</li>
+                    <li>A server run by TavernLauncher: open <strong>Mod Manager &gt; Import Modlist</strong>.</li>
                     <li>
-                      A headless server: save it in TavernLib's folder,{" "}
+                      A headless server: save it in TavernLib's folder (
                       <code className="text-sm break-words text-info">%APPDATA%\TheModdingTavern</code> for the account the
-                      server runs as, and add <code className="text-sm text-info">/modlist {FILE_NAME}</code> to its launch
+                      server runs as) and add <code className="text-sm text-info">/modlist {FILE_NAME}</code> to its launch
                       options.
                     </li>
                     <li>

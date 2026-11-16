@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils"
 
 const PAGES = [
-  { key: "mods", href: "./", label: "Mods" },
-  { key: "modlist", href: "modlist.html", label: "Server modlist" },
-  { key: "builder", href: "builder.html", label: "Manifest builder" },
+  { key: "mods", href: "#mods", label: "Mods" },
+  { key: "modlist", href: "#modlist", label: "Server modlist" },
+  { key: "builder", href: "#builder", label: "Manifest builder" },
 ] as const
 
 // The bar every page shares: the site's name and a link to each page.
@@ -20,7 +20,8 @@ export function SiteHeader({ current }: { current: (typeof PAGES)[number]["key"]
                 aria-current={p.key === current ? "page" : undefined}
                 className={cn(
                   "inline-flex min-h-8 items-center rounded-md px-2 underline-offset-4 hover:underline",
-                  p.key === current ? "font-semibold text-foreground underline" : "text-muted-foreground hover:text-foreground",
+                  // Same weight either way, so picking a page doesn't shift its neighbours.
+                  p.key === current ? "text-foreground underline decoration-primary decoration-2" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {p.label}
