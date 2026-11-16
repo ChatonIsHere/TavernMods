@@ -21,6 +21,15 @@
 }
 .tm-graph .node.external text { fill: var(--muted-foreground); }
 
+/* A node with an icon shows it in the circle; the ring alone carries hot and selected. */
+.tm-graph .node.has-icon .dot,
+.tm-graph .node.has-icon.hot .dot,
+.tm-graph .node.has-icon.selected .dot { fill: none; }
+.tm-graph .node.has-icon.hot .dot { stroke-width: 2.5; }
+.tm-graph .node.has-icon.selected .dot { stroke-width: 3.5; }
+.tm-graph .node.has-icon image { pointer-events: none; }
+.tm-graph .node.has-icon.dim image { opacity: 0.55; }
+
 /* Dimmed, not hidden: each colour mixed 55% into the card keeps 3:1 or more against it. */
 .tm-graph { --dim-fg: color-mix(in srgb, var(--foreground) 55%, var(--card));
   --dim-muted-fg: color-mix(in srgb, var(--muted-foreground) 55%, var(--card));

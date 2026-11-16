@@ -1,9 +1,12 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { type Mod, ownerUrl, text } from "@/lib/mods"
 import { cn } from "@/lib/utils"
-import { ModBadges, ModIcon, ModName, OutLink } from "./mod-parts"
+import { ModBadges, ModIcon, ModName, ModStar, OutLink } from "./mod-parts"
 
+// The first two columns, the star and the icon, have no visible heading.
 const COLUMNS = [
+  ["From this index's owner", "w-6 pr-0"],
+  ["Icon", "w-11 pr-0"],
   ["Mod", "w-[16%]"],
   ["Id", "w-[17%]"],
   ["Author", "w-[11%]"],
@@ -21,9 +24,9 @@ export function ModTable({ mods }: { mods: Mod[] }) {
       <Table className="min-w-[68rem] text-base lg:min-w-0">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            {COLUMNS.map(([label, width]) => (
+            {COLUMNS.map(([label, width], i) => (
               <TableHead key={label} className={cn("sticky top-0 z-10 bg-background text-sm font-semibold", width)}>
-                {label}
+                {i < 2 ? <span className="sr-only">{label}</span> : label}
               </TableHead>
             ))}
           </TableRow>
@@ -31,11 +34,14 @@ export function ModTable({ mods }: { mods: Mod[] }) {
         <TableBody>
           {mods.map((m) => (
             <TableRow key={m.id} className="hover:bg-card">
+              <TableCell className="pr-0">
+                <ModStar mod={m} />
+              </TableCell>
+              <TableCell className="pr-0">
+                <ModIcon mod={m} size={28} className="block" />
+              </TableCell>
               <TableCell className="font-semibold whitespace-normal">
-                <span className="flex items-center gap-2">
-                  <ModIcon mod={m} size={28} />
-                  <ModName mod={m} />
-                </span>
+                <ModName mod={m} star={false} />
               </TableCell>
               <TableCell className="font-mono text-sm break-all whitespace-normal text-muted-foreground">{text(m.id)}</TableCell>
               <TableCell className="break-words whitespace-normal">

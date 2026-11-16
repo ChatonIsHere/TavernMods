@@ -68,4 +68,10 @@ const ownerOf = (m: Mod) => text(m.id).split(".")[0]
 export const repoUrl = (m: Mod) => `https://github.com/${ownerOf(m)}/${text(m.id).slice(ownerOf(m).length + 1)}`
 export const ownerUrl = (m: Mod) => `https://github.com/${ownerOf(m)}`
 
+// The URL of mod's smallest icon at least px across, else its largest; undefined when it has none.
+export const iconUrl = (m: Mod, px: number) => {
+  const icons = (m.icons || []).filter((i) => i && typeof i.url === "string").sort((a, b) => a.size - b.size)
+  return (icons.find((i) => i.size >= px) || icons[icons.length - 1])?.url
+}
+
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`

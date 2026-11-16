@@ -235,6 +235,9 @@ export function DependencyGraph({ query }: { query: string }) {
           className="block h-[min(72vh,46rem)] min-h-[22rem] w-full"
         >
           <defs>
+            <clipPath id="tm-circle" clipPathUnits="objectBoundingBox">
+              <circle cx={0.5} cy={0.5} r={0.5} />
+            </clipPath>
             {(["arrow", "arrow-hot", "arrow-dim"] as const).map((id) => (
               <marker key={id} id={`tm-${id}`} viewBox="0 0 10 10" refX={10} refY={5} markerWidth={9} markerHeight={9}
                 orient="auto" markerUnits="userSpaceOnUse">
@@ -264,7 +267,7 @@ export function DependencyGraph({ query }: { query: string }) {
                 <g
                   key={n.id}
                   ref={(el) => { if (el) nodeEls.current.set(n, el); return () => { nodeEls.current.delete(n) } }}
-                  className={cn("node", !n.mod && "external", !lit.has(n) && "dim",
+                  className={cn("node", !n.mod && "external", n.icon && "has-icon", !lit.has(n) && "dim",
                     !!focus && n !== focus && lit.has(n) && "hot", n === selected && "selected")}
                   tabIndex={0}
                   role="button"
@@ -275,6 +278,10 @@ export function DependencyGraph({ query }: { query: string }) {
                 >
                   <circle className="hit" r={Math.max(n.r, 12)} />
                   <circle className="focus-ring" r={n.r + 4} />
+                  {n.icon && (
+                    <image href={n.icon} x={-n.r} y={-n.r} width={2 * n.r} height={2 * n.r}
+                      clipPath="url(#tm-circle)" preserveAspectRatio="xMidYMid slice" />
+                  )}
                   <circle className="dot" r={n.r} />
                   <text ref={(el) => { if (el) labelEls.current.set(n, el); return () => { labelEls.current.delete(n) } }}>
                     {n.label}
