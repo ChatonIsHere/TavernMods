@@ -32,6 +32,8 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 
 The hashes are checked again when the submission is published, so a file changed after review stops the publish.
 
+**Icons.** Optional. List up to three square PNGs, one per size (128, 256 and 512 px), each at most 1 MB and hosted like screenshots below. The launcher and the mod page each pick the size they need, so give all three if you can. The checks fail if an icon breaks these rules or isn't the size it says.
+
 **Screenshots.** The page shows the first four `screenshots` that are `https://` on `github.com` or `raw.githubusercontent.com` under your own `owner/repo`, immutable (a tagged release asset, or a raw URL pinned to a 40-character commit sha), and `.png`, `.jpg`, `.jpeg`, `.webp` or `.gif`. Others are skipped.
 
 ## Replacing a mod

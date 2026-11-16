@@ -49,7 +49,7 @@ VERSION_SEGMENT_MAX = 2147483647   # TavernLib parses segments as Int32
 
 _MANIFEST_ORDER = [
     "manifest_version", "id", "name", "version", "author", "description",
-    "screenshots", "parity_required", "scenes", "dependencies", "artifacts",
+    "icons", "screenshots", "parity_required", "scenes", "dependencies", "artifacts",
 ]
 _ARTIFACT_ORDER = ["targets", "download_url", "sha256", "package", "library_dependencies"]
 _LIB_ORDER = ["name", "download_url", "sha256", "filename"]
@@ -100,6 +100,9 @@ _CODE_MAGICS = (
 SITE_MARKER = "/*__MODS__*/[]"   # the [] keeps the template a valid page on its own
 SCREENSHOT_EXT_RE = re.compile(r"\.(?:png|jpe?g|webp|gif)$", re.IGNORECASE)
 SCREENSHOT_MAX = 4
+ICON_SIZES = (128, 256, 512)
+ICON_MAX_BYTES = 1024 * 1024
+PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
 _COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 _NON_SUBMISSION_BASENAMES = {"readme.json", "template.json"}
@@ -197,6 +200,8 @@ def _ordered(d, order):
 def ordered_manifest(m):
     """m with its keys in the spec's order at every level."""
     out = _ordered(m, _MANIFEST_ORDER)
+    if isinstance(out.get("icons"), list):
+        out["icons"] = [_ordered(i, ["size", "url"]) if isinstance(i, dict) else i for i in out["icons"]]
     if isinstance(out.get("artifacts"), list):
         arts = []
         for a in out["artifacts"]:
@@ -229,8 +234,10 @@ def _display(m):
 def summary_entry(highest_manifest, versions_in_major):
     """The repository.json entry for one (id, major)."""
     m = highest_manifest
-    entry = {**_display(m), "parity_required": parity_required(m),
-             "targets": manifest_targets(m)}
+    entry = _display(m)
+    if m.get("icons"):
+        entry["icons"] = sorted((_ordered(i, ["size", "url"]) for i in m["icons"]), key=lambda i: i["size"])
+    entry.update({"parity_required": parity_required(m), "targets": manifest_targets(m)})
     if m.get("scenes") is not None:
         entry["scenes"] = list(m["scenes"])
     entry["versions"] = versions_in_major
@@ -312,6 +319,9 @@ def validate_structure(m, check_urls=True):
     if problem:
         errs.append(problem)
 
+    if author:
+        errs += _icon_errors(m.get("icons"), author, repo, check_urls)
+
     deps = m.get("dependencies")
     if not isinstance(deps, dict):
         errs.append("dependencies must be an object, always present (use {} when none)")
@@ -336,6 +346,29 @@ def validate_structure(m, check_urls=True):
         claimed = {}     # target -> index of the artifact that lists it
         for i, a in enumerate(arts):
             errs += _artifact_errors(a, i, claimed, author, repo, check_urls)
+    return errs
+
+
+def _icon_errors(icons, author, repo, check_urls):
+    if icons is None:
+        return []
+    sizes = "/".join(map(str, ICON_SIZES))
+    if not isinstance(icons, list) or not icons:
+        return ["icons must be a non-empty list of {size, url} objects, or left out"]
+    errs, seen = [], set()
+    for i, icon in enumerate(icons):
+        if not isinstance(icon, dict) or set(icon) != {"size", "url"}:
+            errs.append(f"icons[{i}] must be an object with exactly size and url")
+            continue
+        size = icon["size"]
+        if type(size) is not int or size not in ICON_SIZES:
+            errs.append(f"icons[{i}].size must be {sizes}, got {size!r}")
+        elif size in seen:
+            errs.append(f"icons lists size {size} twice")
+        seen.add(size)
+        why = _image_url_error(icon["url"], author, repo, png_only=True) if check_urls else None
+        if why:
+            errs.append(f"icons[{i}].url {why}")
     return errs
 
 
@@ -676,6 +709,23 @@ def download_and_hash(url):
     except Exception:
         os.remove(tmp)
         raise
+
+
+def icon_problem(url, size):
+    """None if url serves a size x size PNG of at most ICON_MAX_BYTES, else why not."""
+    try:
+        with _urlopen(url, 60) as r:
+            data = r.read(ICON_MAX_BYTES + 1)
+    except ValidationError as e:
+        return str(e)
+    except Exception as e:
+        return f"could not download {url} ({e})"
+    if len(data) > ICON_MAX_BYTES:
+        return f"{url} is over {ICON_MAX_BYTES // 1024} KB"
+    if data[:8] != PNG_SIGNATURE or data[12:16] != b"IHDR":
+        return f"{url} isn't a PNG"
+    w, h = int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    return None if (w, h) == (size, size) else f"{url} is {w}x{h}, not {size}x{size}"
 
 
 def _sha256_of_url(url):
@@ -1100,6 +1150,9 @@ def cmd_validate(args):
                                        args.require_vt)
                     errs += e
                     warns += w
+            for icon in m.get("icons") or []:
+                if problem := icon_problem(icon["url"], icon["size"]):
+                    errs.append(f"icon {icon['size']}: {problem}")
 
         for w in warns:
             print(f"  note  {w}")
@@ -1284,14 +1337,16 @@ def cmd_build(args):
 
 # -- site ----------------------------------------------------------------------
 
-def _screenshot_ok(url, author, repo):
-    """None if url may go on the page, else why not: GitHub under the mod's own
+def _image_url_error(url, author, repo, png_only=False):
+    """None if url may be shown, else why not: GitHub under the mod's own
     repo (no third-party host sees visitors), immutable (a release asset or a
     commit-pinned raw URL, so a reviewed image can't be swapped), raster only."""
     if not isinstance(url, str) or not _is_https_url(url):
         return "must be an https:// URL"
     p = urlparse(url)
     parts = [seg for seg in p.path.split("/") if seg]
+    if png_only and not p.path.lower().endswith(".png"):
+        return "must end in .png"
     if not SCREENSHOT_EXT_RE.search(p.path):
         return "must end in .png, .jpg, .jpeg, .webp or .gif (an .svg can carry script)"
     if len(parts) < 3 or parts[0].lower() != author.lower() or parts[1].lower() != repo.lower():
@@ -1320,7 +1375,7 @@ def _screenshots_for(m):
     author, repo = parse_id(m["id"])
     out = []
     for url in raw[:SCREENSHOT_MAX]:
-        why = _screenshot_ok(url, author, repo)
+        why = _image_url_error(url, author, repo)
         if why:
             print(f"note  {m['id']}: not publishing screenshot {url!r} - {why}")
         else:
@@ -1347,7 +1402,7 @@ def index_owner(root, explicit=None):
 
 def cmd_site(args):
     """Bake the mod list into the page. It reads manifests/, not
-    repository.json, because the index doesn't carry screenshots."""
+    repository.json, because the index doesn't carry screenshots or dependencies."""
     root = repo_root(args.repo)
     template_path = args.template or os.path.join(root, "web", "dist", "index.html")
     if not os.path.isfile(template_path):
@@ -1366,7 +1421,7 @@ def cmd_site(args):
         rows.append({"id": mod_id, **_display(m), "targets": manifest_targets(m),
                      "parity_required": parity_required(m), "latest": latest,
                      "dependencies": m.get("dependencies") or {},
-                     "screenshots": _screenshots_for(m)})
+                     "icons": m.get("icons") or [], "screenshots": _screenshots_for(m)})
     # The index owner's own mods (ModdingTavern's in ModdingTavern/TavernMods) come first and are marked.
     owner = index_owner(root, args.owner)
     for r in rows:

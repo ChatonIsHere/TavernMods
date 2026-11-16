@@ -1,7 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { type Mod, ownerUrl, text } from "@/lib/mods"
 import { cn } from "@/lib/utils"
-import { ModBadges, ModName, OutLink } from "./mod-parts"
+import { ModBadges, ModIcon, ModName, OutLink } from "./mod-parts"
 
 const COLUMNS = [
   ["Mod", "w-[16%]"],
@@ -32,7 +32,10 @@ export function ModTable({ mods }: { mods: Mod[] }) {
           {mods.map((m) => (
             <TableRow key={m.id} className="hover:bg-card">
               <TableCell className="font-semibold whitespace-normal">
-                <ModName mod={m} />
+                <span className="flex items-center gap-2">
+                  <ModIcon mod={m} size={28} />
+                  <ModName mod={m} />
+                </span>
               </TableCell>
               <TableCell className="font-mono text-sm break-all whitespace-normal text-muted-foreground">{text(m.id)}</TableCell>
               <TableCell className="break-words whitespace-normal">

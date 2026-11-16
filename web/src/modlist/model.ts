@@ -2,7 +2,7 @@
 // modlist.json they make. The file is the one TavernLauncher's Mod Manager exports (schema 1):
 // TavernLib reads only `mods`, the launcher's import also checks `schema` and shows `repos`.
 import { INDEX, publishedOf, RAW, splitId } from "@/builder/manifest"
-import type { Mod } from "@/lib/mods"
+import type { Icon, Mod } from "@/lib/mods"
 
 export const SCHEMA = 1
 export const FILE_NAME = "modlist.json"
@@ -12,6 +12,7 @@ interface Major {
   name?: string
   author?: string
   description?: string
+  icons?: Icon[]
   parity_required?: boolean
   targets?: string[]
   versions?: string[]
@@ -43,7 +44,7 @@ export function serverMods(repo: Repository): ServerMod[] {
     out.push({
       id, name: top.name || id, author: top.author || splitId(id)[0], description: top.description || "",
       targets: top.targets || [], parity_required: !!top.parity_required, latest: versions[0],
-      dependencies: {}, screenshots: [], own: false, versions,
+      dependencies: {}, icons: Array.isArray(top.icons) ? top.icons : [], screenshots: [], own: false, versions,
     })
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
