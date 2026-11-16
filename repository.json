@@ -164,6 +164,20 @@
         ]
       }
     },
+    "Cheeto35.CheetosOreSpawnFix": {
+      "1": {
+        "name": "CheetosOreSpawnFix",
+        "author": "Cheeto35",
+        "description": "Stops mines and the quarry going bad: keeps each level's ore mix, frees boulders sunk in the rock, moves unreachable nodes and makes mined crystals respawn. Server only.",
+        "parity_required": false,
+        "targets": [
+          "server"
+        ],
+        "versions": [
+          "1.1.3"
+        ]
+      }
+    },
     "Circl-NoE.ATTMateriaLib": {
       "1": {
         "name": "MateriaLib",
@@ -176,6 +190,22 @@
         ],
         "versions": [
           "1.4.0"
+        ]
+      }
+    },
+    "Circl-NoE.EnoughIron": {
+      "1": {
+        "name": "Enough Iron!",
+        "author": "Circl-NoE",
+        "description": "Lets metal handles and metal shields be any metal instead of always looking like iron, and spawn in different metals in the mines.",
+        "parity_required": true,
+        "targets": [
+          "client_android",
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "1.0.2"
         ]
       }
     },

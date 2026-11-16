@@ -14,6 +14,7 @@
       ],
       "download_url": "https://github.com/Cheeto35/CheetosOreSpawnFix/releases/download/v1.1.3/CheetosOreSpawnFix.dll",
       "sha256": "e79b652ff7ada3d0c61d71a0c7c76be53c67f47cbc491e75e036cd88f6cf7be0",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

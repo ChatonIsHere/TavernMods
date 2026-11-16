@@ -17,6 +17,7 @@
       ],
       "download_url": "https://github.com/Circl-NoE/EnoughIron/releases/download/v1.0.2-Q/EnoughIron.dll",
       "sha256": "bc278f5141740e6105142b690b81107586b9b1e15ed65b851e907c2e78431a52",
+      "package": "dll",
       "library_dependencies": []
     },
     {
@@ -25,6 +26,7 @@
       ],
       "download_url": "https://github.com/Circl-NoE/EnoughIron/releases/download/v1.0.2-Q/EnoughIron-Quest.dll",
       "sha256": "9988e64236d7d57ba13f42c08b34955bb7edcf9c6f560c49d7dbda0f3af707a7",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
