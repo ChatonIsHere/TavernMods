@@ -19,6 +19,7 @@ Publish a new release with a higher version, then submit it as above at `submiss
 On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fails if:
 
 - it comes from a fork and does anything other than add one file, or that file isn't at `submissions/<id>/<version>.json` for its own id and version;
+- it comes from a fork and whoever opened it isn't the mod's owner, the publisher of one of its releases, a public member of the owning organisation or a contributor to its repo. A maintainer can still merge it after checking the owner agrees;
 - its version is already published, or is lower than the highest published version in its major. A fix to an older major is fine, but a new major can't start below the newest version;
 - its id, or a dependency's id, has been replaced (see below), or its id differs only in case from a published or replaced one;
 - its `id`, or a dependency's id, isn't a valid GitHub `owner.repo`, or it depends on itself;

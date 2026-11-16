@@ -58,6 +58,7 @@ jobs:
               core.setOutput('ok', 'false');
             } else {
               core.setOutput('ok', 'true');
+              core.setOutput('file', added[0].filename);
             }
 
       - name: Overlay the PR's submissions/ and replacements.json onto main
@@ -77,6 +78,65 @@ jobs:
               rm -f replacements.json
             fi
           fi
+
+      - name: Require a fork PR to come from someone who works on the mod
+        id: owner
+        if: steps.shape.outputs.ok == 'true' && steps.shape.outputs.fork == 'true'
+        uses: actions/github-script@v9
+        env:
+          FILE: ${{ steps.shape.outputs.file }}
+        # The submission is only read as data. A maintainer can still merge a PR this blocks.
+        with:
+          script: |
+            const fs = require('fs');
+            const who = context.payload.pull_request.user.login;
+            const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+            let m;
+            try { m = JSON.parse(fs.readFileSync(process.env.FILE, 'utf8')); } catch { return; }   // validate reports it
+            const id = typeof m.id === 'string' ? m.id : '';
+            const owner = id.split('.')[0], repo = id.slice(owner.length + 1);
+            if (!/^[A-Za-z0-9-]+$/.test(owner) || !/^[A-Za-z0-9._-]+$/.test(repo)) return;   // validate reports it
+
+            const ok = async () => {
+              if (same(who, owner)) return true;
+              // Publishing a release needs write access to the repo.
+              const tags = new Set();
+              for (const a of Array.isArray(m.artifacts) ? m.artifacts : []) {
+                const p = typeof a?.download_url === 'string' && a.download_url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\//);
+                if (p && same(p[1], owner) && same(p[2], repo)) tags.add(decodeURIComponent(p[3]));
+              }
+              for (const tag of [...tags].slice(0, 5)) {
+                try {
+                  const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                  if (same(data.author?.login, who)) return true;
+                } catch (e) { if (e.status !== 404) throw e; }
+              }
+              try {
+                await github.request('GET /orgs/{org}/public_members/{username}', { org: owner, username: who });
+                return true;
+              } catch (e) { if (e.status !== 404) throw e; }
+              try {
+                for await (const { data } of github.paginate.iterator(github.rest.repos.listContributors, { owner, repo, per_page: 100 })) {
+                  if (data.some((c) => same(c.login, who))) return true;
+                }
+              } catch (e) { if (e.status !== 404) throw e; }
+              return false;
+            };
+
+            let problem = null;
+            try {
+              if (!(await ok())) {
+                problem = `${who} opened this PR but isn't ${owner}, the publisher of one of its releases, a public member of ` +
+                  `${owner} or a contributor to ${owner}/${repo}. Ask the mod's owner to submit it. A maintainer can still ` +
+                  `merge it after checking the owner agrees.`;
+              }
+            } catch (e) {
+              problem = `Couldn't check who may submit ${id} (${e.message}). Re-run the check.`;
+            }
+            if (problem) {
+              fs.writeFileSync('owner-problems.txt', problem + '\n');
+              core.setOutput('ok', 'false');
+            }
 
       - uses: actions/setup-python@v7
         if: steps.shape.outputs.ok == 'true'
@@ -114,9 +174,11 @@ jobs:
               // A backtick run from a submitted URL can't close the fence.
               const output = (fs.existsSync('validate-output.txt')
                 ? fs.readFileSync('validate-output.txt', 'utf8') : '(no output)').replace(/`/g, "'");
-              head = rc === '0'
+              const owner = fs.existsSync('owner-problems.txt') ? fs.readFileSync('owner-problems.txt', 'utf8').trim() : '';
+              head = rc === '0' && !owner
                 ? '## Submission checks: PASSED\n\nA maintainer still reviews this before it can merge.'
-                : '## Submission checks: FAILED\n\nFix the items below and push to this PR; the checks re-run on every push.';
+                : '## Submission checks: FAILED\n\nFix the items below and push to this PR. The checks run again on every push.'
+                  + (owner ? '\n\n- ' + owner : '');
               details = '\n\n<details><summary>Validation output</summary>\n\n```\n' + output + '\n```\n\n</details>';
             }
             const body = marker + '\n' + head + details;
@@ -135,4 +197,5 @@ jobs:
         if: always()
         run: |
           [ "${{ steps.shape.outputs.ok }}" = "true" ] || { echo "Single-file submission gate failed."; exit 1; }
+          [ "${{ steps.owner.outputs.ok }}" != "false" ] || { echo "Submitter check failed."; exit 1; }
           [ "${{ steps.validate.outputs.rc }}" = "0" ] || { echo "Validation failed."; exit 1; }
