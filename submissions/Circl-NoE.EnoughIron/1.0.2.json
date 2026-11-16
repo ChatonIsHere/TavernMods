@@ -1,0 +1,31 @@
+{
+  "manifest_version": 2,
+  "id": "Circl-NoE.EnoughIron",
+  "name": "Enough Iron!",
+  "version": "1.0.2",
+  "author": "Circl-NoE",
+  "description": "Lets metal handles and metal shields be any metal instead of always looking like iron, and spawn in different metals in the mines.",
+  "parity_required": true,
+  "dependencies": {
+    "CG-Nik.MetalHandleMoulds": "6.0.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/Circl-NoE/EnoughIron/releases/download/v1.0.2-Q/EnoughIron.dll",
+      "sha256": "bc278f5141740e6105142b690b81107586b9b1e15ed65b851e907c2e78431a52",
+      "library_dependencies": []
+    },
+    {
+      "targets": [
+        "client_android"
+      ],
+      "download_url": "https://github.com/Circl-NoE/EnoughIron/releases/download/v1.0.2-Q/EnoughIron-Quest.dll",
+      "sha256": "9988e64236d7d57ba13f42c08b34955bb7edcf9c6f560c49d7dbda0f3af707a7",
+      "library_dependencies": []
+    }
+  ]
+}
