@@ -220,13 +220,13 @@ A mod is **running** on a server when its record is enabled, ours, and lists `se
 - `parity_required: true`: installed at that exact version, or the launch is refused.
 - `parity_required: false`: offered, ticked by default; the player can decline.
 
-It leaves out its own pinned mods that don't support the server's scene, and never second-guesses the server's. If its installed `client_windows` sha256 differs from `target_sha256.client_windows`, it notes the mismatch without blocking. It launches the game with a `TavernMods` claim, `{id: version}` for every enabled mod installed for `client_windows`.
+It leaves out its own pinned mods that don't support the server's scene, and never second-guesses the server's. If its installed `client_windows` sha256 differs from `target_sha256.client_windows`, it notes the mismatch without blocking. Once its mods are installed it sends the auth port `set_mods`, with its `username`, `token` and `mods`: `{id: version}` for every enabled mod installed for `client_windows`. The server saves the list with the player's account; a join handshake clears it first. The list doesn't go in the join token, which has to fit the game's 1100-byte join message. TavernEssentials' in-game board sends it the same way.
 
 **What the server enforces** (TavernLib, at join):
 
-- A join with a claim must hold the exact version of every running mod with `parity_required: true` whose `targets` include `client_windows`.
-- A join with no claim, or an unreadable one (the standalone Quest app, TavernEssentials' in-game board, a direct connect), is refused if any running mod has `parity_required: true` and `targets` including `client_windows` or `client_android`, and admitted otherwise.
-- Untracked mods are ignored both ways. The claim is self-reported.
+- A player who sent a mod list must hold the exact version of every running mod with `parity_required: true` whose `targets` include `client_windows`.
+- A player who sent none (the standalone Quest app, a direct connect) is refused if any running mod has `parity_required: true` and `targets` including `client_windows` or `client_android`, and admitted otherwise.
+- Untracked mods are ignored both ways. The list is self-reported.
 
 **Scenes on a server.** A headless server skips a mod whose `scenes` exclude the scene it launches into, and disables an installed copy. The server launcher asks before installing such a mod and warns at start.
 
