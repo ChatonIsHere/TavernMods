@@ -18,16 +18,22 @@ export function OutLink({ className, ...props }: ComponentProps<"a">) {
   )
 }
 
-// The mod's name, linked to its source; the index owner's own mods get a star.
-export function ModName({ mod }: { mod: Mod }) {
+// The star on the index owner's own mods; nothing on anyone else's.
+export function ModStar({ mod, className }: { mod: Mod; className?: string }) {
+  if (!mod.own) return null
+  return (
+    <>
+      <StarIcon aria-hidden className={cn("inline size-4 fill-primary align-[-2px] text-primary", className)} />
+      <span className="sr-only">From this index's owner: </span>
+    </>
+  )
+}
+
+// The mod's name, linked to its source, after its star unless star is false.
+export function ModName({ mod, star = true }: { mod: Mod; star?: boolean }) {
   return (
     <OutLink href={repoUrl(mod)} title="Source on GitHub">
-      {mod.own && (
-        <>
-          <StarIcon aria-hidden className="mr-1 inline size-4 fill-primary align-[-2px] text-primary" />
-          <span className="sr-only">From this index's owner: </span>
-        </>
-      )}
+      {star && <ModStar mod={mod} className="mr-1" />}
       {text(mod.name)}
     </OutLink>
   )

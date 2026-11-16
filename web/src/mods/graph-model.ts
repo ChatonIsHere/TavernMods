@@ -1,9 +1,10 @@
-import { type Mod, MODS, text } from "@/lib/mods"
+import { iconUrl, type Mod, MODS, text } from "@/lib/mods"
 
 export interface GNode {
   id: string
   mod: Mod | null // null: a dependency that isn't in this index
   label: string
+  icon?: string // drawn in the circle instead of the plain dot
   needs: GEdge[]
   neededBy: GEdge[]
   r: number
@@ -80,7 +81,9 @@ function build(mods: Mod[]): Graph {
   nodes.forEach((n, i) => {
     n.needs = edges.filter((e) => e.from === n)
     n.neededBy = edges.filter((e) => e.to === n)
-    n.r = 7 + 2.2 * Math.sqrt(n.neededBy.length)
+    n.icon = n.mod ? iconUrl(n.mod, 64) : undefined
+    // An icon needs room to read; a dot doesn't.
+    n.r = Math.max(7 + 2.2 * Math.sqrt(n.neededBy.length), n.icon ? 14 : 0)
     const a = (i / nodes.length) * 2 * Math.PI
     n.x = Math.cos(a) * 160
     n.y = Math.sin(a) * 160
