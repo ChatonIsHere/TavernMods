@@ -21,8 +21,9 @@ import {
 const CONTAINER = "https://github.com/ModdingTavern/a-township-container"
 
 function savedPicks(): Pick[] {
+  try { localStorage.removeItem("modlist-draft") } catch { /* storage blocked */ }   // where older versions kept it
   try {
-    const draft = JSON.parse(localStorage.getItem("modlist-draft") || "null")
+    const draft = JSON.parse(sessionStorage.getItem("modlist-draft") || "null")
     if (Array.isArray(draft)) return draft.filter((p) => typeof p?.id === "string").map((p) => ({ id: p.id, version: String(p.version || "") }))
   } catch { /* no draft, or storage blocked */ }
   return []
@@ -50,7 +51,8 @@ export function ModlistPage() {
   useEffect(() => {
     fetchRepository().then(setRepo).catch((e) => setRepoError(`Couldn't load the mod list: ${(e as Error).message}. Reload to try again.`))
   }, [])
-  useEffect(() => { try { localStorage.setItem("modlist-draft", JSON.stringify(picks)) } catch { /* storage blocked */ } }, [picks])
+  // Only for this tab, like the builder's draft.
+  useEffect(() => { try { sessionStorage.setItem("modlist-draft", JSON.stringify(picks)) } catch { /* storage blocked */ } }, [picks])
   useEffect(() => {
     let live = true
     dependencyClosure(picks, new Set(Object.keys(repo?.mods || {}))).then((n) => { if (live) setNeeded(n) })
