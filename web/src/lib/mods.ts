@@ -1,3 +1,9 @@
+// One of a mod's square PNG icons (128, 256 or 512 px).
+export interface Icon {
+  size: number
+  url: string
+}
+
 // The mod rows `modindex.py site` bakes into index.html as window.MODS.
 export interface Mod {
   id: string
@@ -8,6 +14,7 @@ export interface Mod {
   parity_required: boolean
   latest: string
   dependencies: Record<string, string>
+  icons: Icon[]
   screenshots: string[]
   own: boolean
 }

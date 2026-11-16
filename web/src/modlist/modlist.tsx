@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Field, Hint, RemoveButton, Section, Status } from "@/builder/fields"
 import { plural } from "@/lib/mods"
-import { ModBadges, ModByline } from "@/mods/mod-parts"
+import { ModBadges, ModByline, ModIcon } from "@/mods/mod-parts"
 import {
   dependencyClosure, entries, FILE_NAME, fetchRepository, modlistText, type Pick, problems, readModlist,
   type Repository, serverMods,
@@ -108,6 +108,7 @@ export function ModlistPage() {
                 return (
                   <li key={m.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border bg-muted p-3 sm:p-4">
                     <Checkbox id={box} checked={!!pick} onCheckedChange={(v) => toggle(m.id, v === true)} className="mt-1.5" />
+                    <ModIcon mod={m} size={48} />
                     <div className="grid min-w-0 flex-[1_1_16rem] gap-1.5">
                       <div className="flex flex-wrap items-baseline gap-x-3">
                         <Label htmlFor={box} className="text-lg font-bold">{m.name}</Label>
