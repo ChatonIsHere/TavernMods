@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "id": "CG-Nik.MetalHandleMoulds",
+  "name": "MetalHandleMoulds",
+  "version": "6.0.0",
+  "author": "CG-Nik",
+  "description": "Adds moulds for the seven metal handles, found as loot or made as temporary moulds at the Standard Mould Press.",
+  "parity_required": true,
+  "dependencies": {
+    "CG-Nik.CustomRecipesAPI": "8.0.0"
+  },
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/CG-Nik/MetalHandleMoulds/releases/download/v6/MetalHandleMoulds.dll",
+      "sha256": "febc7b2a27eded3a170828a53bbf8ed9bff9ae4dd0a831b4f2474ad0c904b7b8",
+      "library_dependencies": []
+    }
+  ]
+}
