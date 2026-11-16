@@ -23,7 +23,6 @@ const store = (key: string, value: string) => { try { localStorage.setItem(key, 
 const DRAFT = "builder-draft"
 
 function savedDraft(): State {
-  try { localStorage.removeItem(DRAFT) } catch { /* storage blocked */ }   // where older versions kept it
   try {
     const draft = JSON.parse(sessionStorage.getItem(DRAFT) || "null")
     if (draft && Array.isArray(draft.artifacts)) return { ...blankState(), ...draft }

@@ -21,7 +21,6 @@ import {
 const CONTAINER = "https://github.com/ModdingTavern/a-township-container"
 
 function savedPicks(): Pick[] {
-  try { localStorage.removeItem("modlist-draft") } catch { /* storage blocked */ }   // where older versions kept it
   try {
     const draft = JSON.parse(sessionStorage.getItem("modlist-draft") || "null")
     if (Array.isArray(draft)) return draft.filter((p) => typeof p?.id === "string").map((p) => ({ id: p.id, version: String(p.version || "") }))
