@@ -3,11 +3,12 @@ import { useId, useState } from "react"
 import { Pager } from "@/components/pager"
 import { usePage } from "@/lib/pages"
 import { SiteHeader } from "@/components/site-header"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { MODS, plural } from "@/lib/mods"
+import { MODS, PLATFORMS, plural, runsOn } from "@/lib/mods"
 import { DependencyGraph } from "./dependency-graph"
 import { getGraph, nodeMatches } from "./graph-model"
 import { ModCards } from "./mod-cards"
@@ -28,9 +29,11 @@ export function ModList() {
   const searchId = useId()
   const [query, setQuery] = useState("")
   const [view, setView] = useState<View>(savedView)
+  const [targets, setTargets] = useState<string[]>([])
   const q = query.trim().toLowerCase()
-  const shown = q ? MODS.filter((m) => `${m.id} ${m.name} ${m.author}`.toLowerCase().includes(q)) : MODS
-  const paged = usePage(shown, view === "table" ? 50 : 24, `${q}|${view}`)
+  const shown = MODS.filter((m) => (!q || `${m.id} ${m.name} ${m.author}`.toLowerCase().includes(q)) && runsOn(m, targets))
+  const paged = usePage(shown, view === "table" ? 50 : 24, `${q}|${view}|${targets}`)
+  const toggleTarget = (t: string) => setTargets((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
 
   const changeView = (next: string) => {
     setView(next as View)
@@ -38,12 +41,12 @@ export function ModList() {
   }
 
   let count = `${shown.length} of ${plural(MODS.length, "mod")}`
-  let note = MODS.length === 0 ? "This index has no mods in it yet." : shown.length === 0 ? "No mods match that search." : ""
+  let note = MODS.length === 0 ? "This index has no mods in it yet." : shown.length === 0 ? "No mods match that search and filter." : ""
   if (view === "graph" && MODS.length) {
     const graph = getGraph()
-    const lit = graph.nodes.filter((n) => n.mod && nodeMatches(n, q)).length
+    const lit = graph.nodes.filter((n) => n.mod && nodeMatches(n, q, targets)).length
     count = `${lit} of ${plural(MODS.length, "mod")}, ${plural(graph.edges.length, "dependency link")}`
-    note = lit === 0 ? "No mods match that search." : ""
+    note = lit === 0 ? "No mods match that search and filter." : ""
   }
 
   return (
@@ -73,6 +76,20 @@ export function ModList() {
                   className="h-9 text-base md:text-base"
                 />
               </div>
+              <div role="group" aria-label="Has a build for" className="flex h-9 items-center gap-1 rounded-lg bg-muted p-[3px]">
+                {PLATFORMS.map(({ target, label }) => (
+                  <Button
+                    key={target}
+                    type="button"
+                    variant="ghost"
+                    aria-pressed={targets.includes(target)}
+                    onClick={() => toggleTarget(target)}
+                    className="h-full px-3 text-base aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/80"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
               <TabsList aria-label="View" className="h-9 group-data-horizontal/tabs:h-9">
                 {VIEWS.map(([key, label]) => (
                   <TabsTrigger key={key} value={key} className="px-3 text-base">
@@ -91,7 +108,7 @@ export function ModList() {
             <ModTable mods={paged.items} />
           </TabsContent>
           <TabsContent value="graph" className="text-base">
-            {MODS.length > 0 && <DependencyGraph query={q} />}
+            {MODS.length > 0 && <DependencyGraph query={q} targets={targets} />}
           </TabsContent>
           {view !== "graph" && <Pager {...paged} />}
           {note && <p className="py-6 text-muted-foreground">{note}</p>}
