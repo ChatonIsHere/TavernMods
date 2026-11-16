@@ -79,17 +79,24 @@ jobs:
             fi
           fi
 
-      - name: Require a fork PR to come from someone who works on the mod
+      - name: Check who opened the PR (a fork PR must come from someone who works on the mod)
         id: owner
-        if: steps.shape.outputs.ok == 'true' && steps.shape.outputs.fork == 'true'
+        if: steps.shape.outputs.ok == 'true'
         uses: actions/github-script@v9
         env:
           FILE: ${{ steps.shape.outputs.file }}
-        # The submission is only read as data. A maintainer can still merge a PR this blocks.
+          IS_FORK: ${{ steps.shape.outputs.fork }}
+        # The submission is only read as data. A maintainer can still merge a PR this blocks. Either way the PR
+        # comment says who opened it.
         with:
           script: |
             const fs = require('fs');
             const who = context.payload.pull_request.user.login;
+            const note = (text) => fs.writeFileSync('submitter.txt', text + '\n');
+            if (process.env.IS_FORK !== 'true') {
+              note(`Opened by ${who} from a branch of this repo, which only maintainers can push to, so who submitted it isn't checked.`);
+              return;
+            }
             const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
             let m;
             try { m = JSON.parse(fs.readFileSync(process.env.FILE, 'utf8')); } catch { return; }   // validate reports it
@@ -97,8 +104,9 @@ jobs:
             const owner = id.split('.')[0], repo = id.slice(owner.length + 1);
             if (!/^[A-Za-z0-9-]+$/.test(owner) || !/^[A-Za-z0-9._-]+$/.test(repo)) return;   // validate reports it
 
-            const ok = async () => {
-              if (same(who, owner)) return true;
+            // Why who may submit it, or null.
+            const allowed = async () => {
+              if (same(who, owner)) return "the mod's owner";
               // Publishing a release needs write access to the repo.
               const tags = new Set();
               for (const a of Array.isArray(m.artifacts) ? m.artifacts : []) {
@@ -108,24 +116,26 @@ jobs:
               for (const tag of [...tags].slice(0, 5)) {
                 try {
                   const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
-                  if (same(data.author?.login, who)) return true;
+                  if (same(data.author?.login, who)) return `who published its ${tag} release`;
                 } catch (e) { if (e.status !== 404) throw e; }
               }
               try {
                 await github.request('GET /orgs/{org}/public_members/{username}', { org: owner, username: who });
-                return true;
+                return `a public member of ${owner}`;
               } catch (e) { if (e.status !== 404) throw e; }
               try {
                 for await (const { data } of github.paginate.iterator(github.rest.repos.listContributors, { owner, repo, per_page: 100 })) {
-                  if (data.some((c) => same(c.login, who))) return true;
+                  if (data.some((c) => same(c.login, who))) return `a contributor to ${owner}/${repo}`;
                 }
               } catch (e) { if (e.status !== 404) throw e; }
-              return false;
+              return null;
             };
 
             let problem = null;
             try {
-              if (!(await ok())) {
+              const why = await allowed();
+              if (why) note(`Opened by ${who}, ${why}.`);
+              else {
                 problem = `${who} opened this PR but isn't ${owner}, the publisher of one of its releases, a public member of ` +
                   `${owner} or a contributor to ${owner}/${repo}. Ask the mod's owner to submit it. A maintainer can still ` +
                   `merge it after checking the owner agrees.`;
@@ -175,10 +185,11 @@ jobs:
               const output = (fs.existsSync('validate-output.txt')
                 ? fs.readFileSync('validate-output.txt', 'utf8') : '(no output)').replace(/`/g, "'");
               const owner = fs.existsSync('owner-problems.txt') ? fs.readFileSync('owner-problems.txt', 'utf8').trim() : '';
+              const submitter = fs.existsSync('submitter.txt') ? ' ' + fs.readFileSync('submitter.txt', 'utf8').trim() : '';
               head = rc === '0' && !owner
-                ? '## Submission checks: PASSED\n\nA maintainer still reviews this before it can merge.'
+                ? '## Submission checks: PASSED\n\nA maintainer still reviews this before it can merge.' + submitter
                 : '## Submission checks: FAILED\n\nFix the items below and push to this PR. The checks run again on every push.'
-                  + (owner ? '\n\n- ' + owner : '');
+                  + (owner ? '\n\n- ' + owner : submitter ? '\n\n' + submitter.trim() : '');
               details = '\n\n<details><summary>Validation output</summary>\n\n```\n' + output + '\n```\n\n</details>';
             }
             const body = marker + '\n' + head + details;
