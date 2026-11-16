@@ -82,8 +82,7 @@ function build(mods: Mod[]): Graph {
     n.needs = edges.filter((e) => e.from === n)
     n.neededBy = edges.filter((e) => e.to === n)
     n.icon = n.mod ? iconUrl(n.mod, 64) : undefined
-    // An icon needs room to read; a dot doesn't.
-    n.r = Math.max(7 + 2.2 * Math.sqrt(n.neededBy.length), n.icon ? 14 : 0)
+    n.r = 7 + 2.2 * Math.sqrt(n.neededBy.length)
     const a = (i / nodes.length) * 2 * Math.PI
     n.x = Math.cos(a) * 160
     n.y = Math.sin(a) * 160
