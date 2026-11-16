@@ -17,6 +17,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/MetalHandleMoulds/releases/download/v6/MetalHandleMoulds.dll",
       "sha256": "febc7b2a27eded3a170828a53bbf8ed9bff9ae4dd0a831b4f2474ad0c904b7b8",
+      "package": "dll",
       "library_dependencies": []
     }
   ]

@@ -76,6 +76,21 @@
         ]
       }
     },
+    "CG-Nik.MetalHandleMoulds": {
+      "6": {
+        "name": "MetalHandleMoulds",
+        "author": "CG-Nik",
+        "description": "Adds moulds for the seven metal handles, found as loot or made as temporary moulds at the Standard Mould Press.",
+        "parity_required": true,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "6.0.0"
+        ]
+      }
+    },
     "ChatonIsHere.Canary": {
       "0": {
         "name": "Canary",
