@@ -6,9 +6,7 @@
   "author": "Circl-NoE",
   "description": "Lets metal handles and metal shields be any metal instead of always looking like iron, and spawn in different metals in the mines.",
   "parity_required": true,
-  "dependencies": {
-    "CG-Nik.MetalHandleMoulds": "6.0.0"
-  },
+  "dependencies": {},
   "artifacts": [
     {
       "targets": [
