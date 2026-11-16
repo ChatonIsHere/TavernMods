@@ -164,6 +164,21 @@
         ]
       }
     },
+    "ChatonIsHere.TavernEssentials": {
+      "0": {
+        "name": "TavernEssentials (mod manager test)",
+        "author": "ChatonIsHere",
+        "description": "Test build of TavernEssentials for the mod manager: board joins carry your mods, so servers that require mods let you in, and a join refused for missing mods says why. Use it instead of TavernEssentials, not beside it.",
+        "parity_required": false,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "0.14.1"
+        ]
+      }
+    },
     "Cheeto35.CheetosOreSpawnFix": {
       "1": {
         "name": "CheetosOreSpawnFix",

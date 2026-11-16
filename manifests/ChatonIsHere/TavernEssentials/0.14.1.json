@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/ChatonIsHere/TavernEssentials/releases/download/v0.14.1/TavernEssentials-0.14.1.zip",
       "sha256": "677fd5cc61dc3c6961fc6246b967873bce09ce74003982fa777c2a2098bb4d17",
+      "package": "zip",
       "library_dependencies": []
     }
   ]
