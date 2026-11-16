@@ -81,10 +81,11 @@ export function ModList() {
                   <Button
                     key={target}
                     type="button"
-                    variant="ghost"
+                    // The primary style when picked: overriding ghost loses to its dark-mode hover.
+                    variant={targets.includes(target) ? "default" : "ghost"}
                     aria-pressed={targets.includes(target)}
                     onClick={() => toggleTarget(target)}
-                    className="h-full px-3 text-base aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/80"
+                    className="h-full px-3 text-base"
                   >
                     {label}
                   </Button>
