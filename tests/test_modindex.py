@@ -23,7 +23,7 @@ import modindex as mi
 FIXTURES = os.path.join(HERE, "fixtures", "v2")
 CLEAN = {"malicious": 0, "suspicious": 0, "harmless": 1, "undetected": 60}
 MANIFEST_ORDER = ["manifest_version", "id", "name", "version", "author", "description",
-                  "screenshots", "parity_required", "scenes", "dependencies", "artifacts"]
+                  "icons", "screenshots", "parity_required", "scenes", "dependencies", "artifacts"]
 ARTIFACT_ORDER = ["targets", "download_url", "sha256", "package", "library_dependencies"]
 LIBRARY_ORDER = ["name", "download_url", "sha256", "filename"]
 
@@ -54,6 +54,19 @@ def manifest(mod_id="Owner.Repo", version="1.0.0", targets=("client_windows", "s
                        else [artifact(author, repo, version, targets)])}
     d.update(over)
     return d
+
+
+SHA40 = "0123456789abcdef" * 2 + "01234567"
+
+
+def icon(size, owner="Owner", repo="Repo"):
+    return {"size": size, "url": f"https://raw.githubusercontent.com/{owner}/{repo}/{SHA40}/icon-{size}.png"}
+
+
+def png(width, height=None, pad=b""):
+    """The first bytes of a PNG: signature and IHDR chunk."""
+    return (mi.PNG_SIGNATURE + (13).to_bytes(4, "big") + b"IHDR" + width.to_bytes(4, "big")
+            + (height or width).to_bytes(4, "big") + b"\x08\x06\x00\x00\x00" + pad)
 
 
 def with_artifact(m, i=0, **over):
@@ -294,8 +307,9 @@ class Structure(unittest.TestCase):
 class CanonicalOrder(unittest.TestCase):
     def test_every_level_is_reordered(self):
         out = mi.ordered_manifest(scrambled(manifest(scenes=["quest"], screenshots=[], artifacts=[
-            artifact(package="dll", library_dependencies=[library()])])))
+            artifact(package="dll", library_dependencies=[library()])], icons=[{"url": "u", "size": 128}])))
         self.assertEqual(list(out), MANIFEST_ORDER)
+        self.assertEqual(list(out["icons"][0]), ["size", "url"])
         self.assertEqual(list(out["artifacts"][0]), ARTIFACT_ORDER)
         self.assertEqual(list(out["artifacts"][0]["library_dependencies"][0]), LIBRARY_ORDER)
 
@@ -313,6 +327,11 @@ class CanonicalOrder(unittest.TestCase):
         self.assertIs(entry["parity_required"], False)
         self.assertEqual(entry["scenes"], ["quest"])
         self.assertNotIn("scenes", mi.summary_entry(manifest(), ["1.0.0"]))
+        self.assertNotIn("icons", mi.summary_entry(manifest(), ["1.0.0"]))
+        entry = mi.summary_entry(manifest(icons=[icon(512), {"url": icon(128)["url"], "size": 128}]), ["1.0.0"])
+        self.assertEqual(list(entry)[:4], ["name", "author", "description", "icons"])
+        self.assertEqual(entry["icons"], [icon(128), icon(512)])
+        self.assertEqual(list(entry["icons"][0]), ["size", "url"])
         # a missing value never reaches the index as relaxed
         self.assertIs(mi.summary_entry(without(manifest(), "parity_required"),
                                        ["1.0.0"])["parity_required"], True)
@@ -432,6 +451,16 @@ class Validate(unittest.TestCase):
         return manifest(artifacts=[
             self.serve(artifact(targets=["client_windows"], asset="Repo-pc.dll"), b"MZ pc"),
             self.serve(artifact(targets=["server"], asset="Repo-server.zip"), zip_bytes(server_zip))])
+
+    def test_icons_are_downloaded_and_measured(self):
+        sizes = {icon(128)["url"]: png(128), icon(256)["url"]: png(200)}
+        stub(self, mi, "_urlopen", lambda url, timeout: contextlib.nullcontext(io.BytesIO(sizes[url])))
+        m = manifest(artifacts=[self.serve(artifact(), b"MZ dll")], icons=[icon(128), icon(256)])
+        rc, out = self.validate(m)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("icon 256:", out)
+        self.assertIn("is 200x200, not 256x256", out)
+        self.assertNotIn("icon 128:", out)
 
     def test_every_artifact_is_downloaded_and_verified(self):
         rc, out = self.validate(self.split([("Repo.dll", b"MZ server")]))
@@ -690,9 +719,59 @@ class Build(unittest.TestCase):
         self.assertEqual(tmpl["artifacts"][0]["targets"], ["client_windows", "server"])
 
 
+class Icons(unittest.TestCase):
+    def test_valid_icons_pass(self):
+        for icons in ([icon(128)], [icon(128), icon(256), icon(512)], [icon(512), icon(256)],
+                      [{"size": 256, "url": "https://github.com/Owner/Repo/releases/download/v1/i.png"}]):
+            with self.subTest(icons):
+                self.assertEqual(mi.validate_structure(manifest(icons=icons)), [])
+        self.assertEqual(mi.validate_structure(manifest(icons=None)), [])
+
+    def test_bad_icons_are_refused(self):
+        cases = {
+            "not a list": ("icon.png", "non-empty list"),
+            "empty": ([], "non-empty list"),
+            "not an object": (["https://x/i.png"], "exactly size and url"),
+            "extra key": ([{**icon(128), "alt": "x"}], "exactly size and url"),
+            "missing url": ([{"size": 128}], "exactly size and url"),
+            "odd size": ([icon(64)], "128/256/512"),
+            "size as text": ([{**icon(128), "size": "128"}], "128/256/512"),
+            "size as bool": ([{**icon(128), "size": True}], "128/256/512"),
+            "duplicate size": ([icon(128), icon(128)], "size 128 twice"),
+            "not png": ([{"size": 128, "url": icon(128)["url"][:-4] + ".jpg"}], "must end in .png"),
+            "branch url": ([{"size": 128, "url": "https://raw.githubusercontent.com/Owner/Repo/main/i.png"}],
+                           "commit sha"),
+            "other repo": ([icon(128, owner="Other")], "under Owner/Repo"),
+        }
+        for label, (icons, needle) in cases.items():
+            with self.subTest(label):
+                errs = mi.validate_structure(manifest(icons=icons))
+                self.assertTrue([e for e in errs if needle in e], errs)
+
+    def serve(self, data):
+        stub(self, mi, "_urlopen", lambda url, timeout: contextlib.nullcontext(io.BytesIO(data)))
+
+    def test_icon_problem_checks_the_png(self):
+        url = icon(128)["url"]
+        self.serve(png(128, pad=b"rest"))
+        self.assertIsNone(mi.icon_problem(url, 128))
+        self.assertIn("is 128x128, not 256x256", mi.icon_problem(url, 256))
+        self.serve(png(128, 96))
+        self.assertIn("is 128x96", mi.icon_problem(url, 128))
+        self.serve(b"GIF89a" + b"\0" * 30)
+        self.assertIn("isn't a PNG", mi.icon_problem(url, 128))
+        self.serve(png(128, pad=b"\0" * mi.ICON_MAX_BYTES))
+        self.assertIn("is over 1024 KB", mi.icon_problem(url, 128))
+
+        def refuse(url, timeout):
+            raise urllib.error.URLError("down")
+        stub(self, mi, "_urlopen", refuse)
+        self.assertIn("could not download", mi.icon_problem(url, 128))
+
+
 class Site(unittest.TestCase):
     def test_screenshot_rules(self):
-        sha = "0123456789abcdef" * 2 + "01234567"
+        sha = SHA40
         ok = ["https://github.com/Owner/Repo/releases/download/v1/a.png",
               "https://github.com/owner/repo/releases/download/v1/a.JPG",
               f"https://raw.githubusercontent.com/Owner/Repo/{sha}/docs/a.webp"]
@@ -703,9 +782,10 @@ class Site(unittest.TestCase):
                "https://raw.githubusercontent.com/Owner/Repo/main/a.png": "commit sha",
                "https://example.com/Owner/Repo/x/a.png": "github.com"}
         for url in ok:
-            self.assertIsNone(mi._screenshot_ok(url, "Owner", "Repo"), url)
+            self.assertIsNone(mi._image_url_error(url, "Owner", "Repo"), url)
         for url, needle in bad.items():
-            self.assertIn(needle, mi._screenshot_ok(url, "Owner", "Repo"), url)
+            self.assertIn(needle, mi._image_url_error(url, "Owner", "Repo"), url)
+        self.assertIn(".png", mi._image_url_error(ok[2], "Owner", "Repo", png_only=True))
 
     @staticmethod
     def _write_page(path):
@@ -723,7 +803,8 @@ class Site(unittest.TestCase):
         root = temp_dir(self)
         self._write_page(os.path.join(root, "web", "dist", "index.html"))   # what npm run build leaves
         shots = [f"https://github.com/Owner/Repo/releases/download/v1/{i}.png" for i in range(5)]
-        for v, extra in (("1.0.0", {}), ("1.1.0", {"description": "</script>", "screenshots": shots})):
+        for v, extra in (("1.0.0", {}), ("1.1.0", {"description": "</script>", "screenshots": shots,
+                                                   "icons": [icon(128)]})):
             m = manifest(version=v, **extra)
             m["artifacts"][0]["package"] = "dll"
             mi._write_json(os.path.join(root, "manifests", "Owner", "Repo", f"{v}.json"), m)
@@ -733,8 +814,8 @@ class Site(unittest.TestCase):
         data = self._baked_rows(os.path.join(root, "site", "index.html"))
         self.assertNotIn("<", data)          # nothing can close the <script>
         rows = json.loads(data)
-        self.assertEqual([(r["id"], r["latest"], r["description"], len(r["screenshots"]))
-                          for r in rows], [("Owner.Repo", "1.1.0", "</script>", 4)])
+        self.assertEqual([(r["id"], r["latest"], r["description"], len(r["screenshots"]), r["icons"])
+                          for r in rows], [("Owner.Repo", "1.1.0", "</script>", 4, [icon(128)])])
 
     def test_site_template_and_out(self):
         root = temp_dir(self)
