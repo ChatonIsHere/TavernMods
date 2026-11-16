@@ -1,5 +1,7 @@
 import { useId, useState } from "react"
 
+import { Pager } from "@/components/pager"
+import { usePage } from "@/lib/pages"
 import { SiteHeader } from "@/components/site-header"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +30,7 @@ export function ModList() {
   const [view, setView] = useState<View>(savedView)
   const q = query.trim().toLowerCase()
   const shown = q ? MODS.filter((m) => `${m.id} ${m.name} ${m.author}`.toLowerCase().includes(q)) : MODS
+  const paged = usePage(shown, view === "table" ? 50 : 24, `${q}|${view}`)
 
   const changeView = (next: string) => {
     setView(next as View)
@@ -35,12 +38,12 @@ export function ModList() {
   }
 
   let count = `${shown.length} of ${plural(MODS.length, "mod")}`
-  let note = MODS.length === 0 ? "This index has no mods in it yet." : shown.length === 0 ? "Nothing here matches that." : ""
+  let note = MODS.length === 0 ? "This index has no mods in it yet." : shown.length === 0 ? "No mods match that search." : ""
   if (view === "graph" && MODS.length) {
     const graph = getGraph()
     const lit = graph.nodes.filter((n) => n.mod && nodeMatches(n, q)).length
     count = `${lit} of ${plural(MODS.length, "mod")}, ${plural(graph.edges.length, "dependency link")}`
-    note = lit === 0 ? "Nothing here matches that." : ""
+    note = lit === 0 ? "No mods match that search." : ""
   }
 
   return (
@@ -52,9 +55,9 @@ export function ModList() {
             <div className="min-w-0 flex-[1_1_24rem]">
               <h1 className="text-3xl font-bold text-primary">Community Mods</h1>
               <p className="mt-2 max-w-prose">
-                Install from <strong>Mod Manager → Get Mods</strong> in TavernLauncher. For a server,{" "}
-                <a href="modlist.html" className="text-primary underline underline-offset-4">make its modlist</a>. Mod authors:{" "}
-                <a href="builder.html" className="text-primary underline underline-offset-4">build a manifest</a>.
+                Players install these from <strong>Mod Manager &gt; Get Mods</strong> in TavernLauncher. Server hosts can{" "}
+                <a href="#modlist" className="text-primary underline underline-offset-4">make a modlist</a>, and mod authors
+                can <a href="#builder" className="text-primary underline underline-offset-4">build a manifest</a>.
               </p>
             </div>
             <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
@@ -64,7 +67,7 @@ export function ModList() {
                   id={searchId}
                   type="search"
                   autoComplete="off"
-                  placeholder="Mods, authors, ids…"
+                  placeholder="Name, author or id"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="h-9 text-base md:text-base"
@@ -82,14 +85,15 @@ export function ModList() {
 
           <p className="mt-4 mb-3 text-sm text-muted-foreground" aria-live="polite">{count}</p>
           <TabsContent value="cards" className="text-base">
-            <ModCards mods={shown} />
+            <ModCards mods={paged.items} />
           </TabsContent>
           <TabsContent value="table" className="text-base">
-            <ModTable mods={shown} />
+            <ModTable mods={paged.items} />
           </TabsContent>
           <TabsContent value="graph" className="text-base">
             {MODS.length > 0 && <DependencyGraph query={q} />}
           </TabsContent>
+          {view !== "graph" && <Pager {...paged} />}
           {note && <p className="py-6 text-muted-foreground">{note}</p>}
         </main>
       </Tabs>

@@ -70,14 +70,14 @@ export function Builder() {
   state.artifacts.forEach((a, i) => a.targets.forEach((t) => { if (!(t in targetOwner)) targetOwner[t] = i }))
 
   const startFromRelease = async () => {
-    const result = await fillFromRelease(releaseUrl.trim(), indexMods, () => setReleaseStatus("Reading the release…"))
+    const result = await fillFromRelease(releaseUrl.trim(), indexMods, () => setReleaseStatus("Reading the release."))
     if (result.state) setState(result.state)
     setReleaseStatus(result.status)
   }
 
   const loadPublished = async () => {
     if (!validId) { setLoadStatus("Fill in the owner and repo first."); return }
-    setLoadStatus("Loading…")
+    setLoadStatus("Loading.")
     try {
       const r = await fetch(`${RAW}/manifests/${state.owner}/${state.repo}/latest.json`, { cache: "no-store" })
       if (!r.ok) { setLoadStatus(`${modId(state)} isn't published in ${INDEX.owner}/${INDEX.repo} yet.`); return }
@@ -97,7 +97,7 @@ export function Builder() {
   }
   const copy = async () => {
     try { await navigator.clipboard.writeText(json); setOutStatus("Copied.") }
-    catch { setOutStatus("Couldn't copy; select the text below instead.") }
+    catch { setOutStatus("Couldn't copy. Select the text below and copy it yourself.") }
   }
   // Only collaborators can add a file to the index itself, so the file goes to the
   // submitter's fork, whose pull requests target the index by default.
@@ -107,7 +107,7 @@ export function Builder() {
   }
 
   const issues = [...errors]
-  if (hashless.length) issues.push(`No hash yet for ${hashless.join(", ")}: hash the file here, or download and run fill-hashes.`)
+  if (hashless.length) issues.push(`No hash yet for ${hashless.join(", ")}. Hash the file here, or download the manifest and run fill-hashes.`)
 
   return (
     <>
@@ -116,9 +116,10 @@ export function Builder() {
         <div className="mb-6 border-b pb-5">
           <h1 className="text-3xl font-bold text-primary">Manifest Builder</h1>
           <p className="mt-2 max-w-prose">
-            Fill this in to make the manifest for a new mod or a new version, then open the pull request or download the
-            file. Rules: <a href={DOCS} className="text-primary underline underline-offset-4">SUBMITTING.md</a>. A release
-            link is looked up through GitHub's API; nothing else you enter leaves your browser until you submit.
+            Fill this in to make the manifest for a new mod or a new version, then open a pull request with it or
+            download the file. The rules are in <a href={DOCS} className="text-primary underline underline-offset-4">SUBMITTING.md</a>.
+            A release link you paste is looked up through GitHub's API. Nothing else you type leaves your browser until you
+            submit.
           </p>
         </div>
 
@@ -146,9 +147,9 @@ export function Builder() {
 
             <Section
               title="Mod"
-              hint={<>The id is your GitHub <code className="text-info">owner.repo</code>; every build must be a release asset
-                of that repo. Updating? Start from the new release above, or fill in the owner and repo and load what's
-                published.</>}
+              hint={<>The id is your GitHub <code className="text-info">owner.repo</code>, and every build must be a release
+                asset of that repo. To update a mod, start from the new release above, or fill in the owner and repo and
+                load the published manifest.</>}
             >
               <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
                 <Field label="GitHub owner" value={state.owner} list={ids.owners} placeholder="YourGitHubUser"
@@ -164,7 +165,7 @@ export function Builder() {
               </div>
               {published.length > 0 && (
                 <Hint className="text-foreground">
-                  {modId(state)} is published: {published.slice(0, 5).join(", ")}{published.length > 5 ? ", …" : ""}. Load
+                  {modId(state)} is published: {published.slice(0, 5).join(", ")}{published.length > 5 ? " and more" : ""}. Load
                   the latest to start from it.
                 </Hint>
               )}
@@ -177,7 +178,7 @@ export function Builder() {
                 onChange={(v) => edit((s) => { s.description = v })} />
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={loadPublished}>Load published manifest</Button>
-                <Button type="button" variant="outline" onClick={() => loadFile.current?.click()}>Load a manifest file…</Button>
+                <Button type="button" variant="outline" onClick={() => loadFile.current?.click()}>Load a manifest file</Button>
                 <input
                   ref={loadFile}
                   type="file"
@@ -199,8 +200,8 @@ export function Builder() {
 
             <Section
               title="Joining a server"
-              hint={<>Separate client and server builds from one release are still one version, so they don't change this.
-                If unsure, keep the first: <code className="text-info">parity_required: true</code>.</>}
+              hint={<>Client and server builds from one release count as one version, so splitting them doesn't change
+                this. If you're not sure, keep the first option (<code className="text-info">parity_required: true</code>).</>}
             >
               <RadioGroup
                 aria-label="Joining a server"
@@ -269,7 +270,7 @@ export function Builder() {
                       onChange={(v) => edit((s) => { s.artifacts[i].sha256 = v.trim() })} />
                     <HashButton what={`build ${i + 1}`} onHash={(sha) => edit((s) => { s.artifacts[i].sha256 = sha })} />
                   </div>
-                  <Hint>Libraries: third-party or native DLLs installed to UserLibs/</Hint>
+                  <Hint>Libraries are third-party or native DLLs, installed to UserLibs/.</Hint>
                   {a.library_dependencies.map((lib, j) => {
                     const what = `build ${i + 1}, library ${j + 1}`
                     const setLib = (fn: (l: State["artifacts"][number]["library_dependencies"][number]) => void) =>
@@ -282,7 +283,7 @@ export function Builder() {
                           <Field label="File name in UserLibs/" value={lib.filename} placeholder="from the link"
                             onChange={(v) => setLib((l) => { l.filename = v })} />
                         </div>
-                        <Field label="Download link (any https://)" value={lib.download_url} placeholder="https://…/ExampleLib.dll"
+                        <Field label="Download link (any https://)" value={lib.download_url} placeholder="https://example.com/ExampleLib.dll"
                           onChange={(v) => setLib((l) => { l.download_url = v })} />
                         <div className="flex flex-wrap items-end gap-2">
                           <Field label="SHA-256" mono className="flex-[1_1_18rem]" value={lib.sha256}
@@ -325,7 +326,7 @@ export function Builder() {
               <AddButton onClick={() => edit((s) => { s.dependencies.push({ id: "", version: "" }) })}>Add dependency</AddButton>
             </Section>
 
-            <Section title="Icons" hint="Optional square PNGs, shown in the launcher and on the mod page. Give all three sizes if you can. Hosted like screenshots: a release asset of your repo, or a raw.githubusercontent.com link pinned to a commit.">
+            <Section title="Icons" hint="Optional square PNGs, shown in the launcher and on the mod page. Give all three sizes if you can. Host them like screenshots, as a release asset of your repo or a raw.githubusercontent.com link pinned to a commit.">
               <div className="flex flex-wrap items-end gap-2">
                 {ICON_SIZES.map((n) => (
                   <Field key={n} label={`${n} × ${n} px`} className="flex-[1_1_14rem]" value={state.icons[n] || ""}
@@ -334,7 +335,7 @@ export function Builder() {
               </div>
             </Section>
 
-            <Section title="Screenshots" hint="Optional, up to 4, shown on the mod page. A release asset of your repo, or a raw.githubusercontent.com link pinned to a commit; .png, .jpg, .webp or .gif.">
+            <Section title="Screenshots" hint="Optional, up to 4, shown on the mod page. Use a release asset of your repo or a raw.githubusercontent.com link pinned to a commit, as .png, .jpg, .webp or .gif.">
               {state.screenshots.map((shot, i) => (
                 <div key={i} className="flex flex-wrap items-end gap-2">
                   <Field label={`Image link ${i + 1}`} className="flex-[1_1_18rem]" value={shot}

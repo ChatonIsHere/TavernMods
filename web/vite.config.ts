@@ -8,9 +8,4 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
-  build: {
-    rollupOptions: {
-      input: { index: path.resolve(__dirname, "index.html"), builder: path.resolve(__dirname, "builder.html"), modlist: path.resolve(__dirname, "modlist.html") },
-    },
-  },
 })
