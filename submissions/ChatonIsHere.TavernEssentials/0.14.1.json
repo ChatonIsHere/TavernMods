@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "ChatonIsHere.TavernEssentials",
+  "name": "TavernEssentials (mod manager test)",
+  "version": "0.14.1",
+  "author": "ChatonIsHere",
+  "description": "Test build of TavernEssentials for the mod manager: board joins carry your mods, so servers that require mods let you in, and a join refused for missing mods says why. Use it instead of TavernEssentials, not beside it.",
+  "parity_required": false,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/ChatonIsHere/TavernEssentials/releases/download/v0.14.1/TavernEssentials-0.14.1.zip",
+      "sha256": "677fd5cc61dc3c6961fc6246b967873bce09ce74003982fa777c2a2098bb4d17",
+      "library_dependencies": []
+    }
+  ]
+}
