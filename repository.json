@@ -31,6 +31,21 @@
         ]
       }
     },
+    "CG-Nik.CustomRecipesAPI": {
+      "8": {
+        "name": "CustomRecipesAPI",
+        "author": "CG-Nik",
+        "description": "An API mod for A Township Tale that lets other mods add custom moulds and smelting recipes.",
+        "parity_required": true,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "8.0.0"
+        ]
+      }
+    },
     "CG-Nik.DyeingAPI": {
       "8": {
         "name": "DyeingAPI",

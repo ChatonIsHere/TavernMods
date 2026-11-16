@@ -15,6 +15,7 @@
       ],
       "download_url": "https://github.com/CG-Nik/CustomRecipesAPI/releases/download/v8/CustomRecipesAPI.dll",
       "sha256": "389c184e4fcf0f5c4b2a5f2fa8a2b86ca5d99ee230da8b4e78319ff75da08b10",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
