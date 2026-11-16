@@ -21,6 +21,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import posixpath
 import re
 import socket
 import subprocess
@@ -1039,10 +1040,12 @@ def _zip_read_errors(zf):
 
 
 def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=False,
-                vt_seen=None, require_vt=False):
+                vt_seen=None, require_vt=False, vt=None):
     """Download url, verify its hash, check an artifact is a dll or a sound
-    zip, and scan it. Returns (errs, warns)."""
+    zip, and scan it. Returns (errs, warns); with vt=(errs, warns), the
+    VirusTotal results go there instead."""
     errs, warns = [], []
+    vt_errs, vt_warns = vt if vt is not None else (errs, warns)
     try:
         tmp, actual = download_and_hash(url)
     except Exception as e:
@@ -1066,20 +1069,66 @@ def _check_file(url, expected_sha, api_key, vt_max_malicious, label, allow_zip=F
                       f"as a file, and nothing here scans what it holds"
                       for name in nested_archives(tmp)]
         if not api_key:
-            (errs if require_vt else warns).append(
+            (vt_errs if require_vt else vt_warns).append(
                 f"{label}: VirusTotal skipped (no VIRUSTOTAL_API_KEY set)")
         elif is_zip:
-            _vt_scan_zip_members(tmp, api_key, vt_max_malicious, label, errs, warns, vt_seen,
+            _vt_scan_zip_members(tmp, api_key, vt_max_malicious, label, vt_errs, vt_warns, vt_seen,
                                  require_vt)
         else:
-            _vt_scan_path(tmp, actual, api_key, vt_max_malicious, label, errs, warns, vt_seen,
+            _vt_scan_path(tmp, actual, api_key, vt_max_malicious, label, vt_errs, vt_warns, vt_seen,
                           require_vt)
     finally:
         os.remove(tmp)
     return errs, warns
 
 
+def _rules_confirmed(m, known):
+    published = sorted(known.get(m["id"], {}), key=_vkey)
+    major = m["version"].split(".")[0]
+    in_major = [v for v in published if v.split(".")[0] == major]
+    if in_major:
+        place = f"comes after {in_major[-1]}, the highest published {major}.x"
+    elif published:
+        place = f"starts major {major} (the newest published is {published[-1]})"
+    else:
+        place = f"is the first release of {m['id']}"
+    scenes = m.get("scenes")
+    return [f"{m['id']} is a valid GitHub owner.repo, and not replaced",
+            f"Version {m['version']} {place}",
+            f"Targets: {', '.join(manifest_targets(m))}. parity_required: {str(m['parity_required']).lower()}. "
+            f"Scenes: {', '.join(scenes) if scenes else 'all'}"]
+
+
+REPORT_CHECKS = ("replacements.json", "Manifest rules", "Dependencies and libraries",
+                 "Files match their hashes", "VirusTotal scan", "Icons")
+
+
 def cmd_validate(args):
+    """--report FILE also writes each check's outcome as JSON: {check: {"status": "pass" | "fail" |
+    "skipped", "title", "errors", "notes", "ok": what it confirmed}}, for the workflow to show as
+    separate checks."""
+    report = {c: {"status": "skipped", "title": "", "errors": [], "notes": [], "ok": []} for c in REPORT_CHECKS}
+
+    def record(check, errs, notes=(), who="", ok=(), title=""):
+        r = report[check]
+        r["errors"] += [f"{who}{e}" for e in errs]
+        r["notes"] += [f"{who}{n}" for n in notes]
+        r["status"] = "fail" if r["errors"] else "pass"
+        if not errs:
+            r["ok"] += [f"{who}{o}" for o in ok]
+            for o in ok:
+                print(f"  ok    {who}{o}")
+            r["title"] = r["title"] or title
+
+    try:
+        return _validate(args, record)
+    finally:
+        if getattr(args, "report", None):
+            with open(args.report, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=1)
+
+
+def _validate(args, record):
     root = repo_root(args.repo)
     files = list(_submission_files(args.paths or [os.path.join(root, "submissions")]))
     known = _known_manifests(root)
@@ -1095,7 +1144,12 @@ def cmd_validate(args):
         print(f"== {REPLACEMENTS_FILE} ==")
         # A replacement may name a mod submitted in the same PR.
         both = {i: {**known.get(i, {}), **submitted.get(i, {})} for i in set(known) | set(submitted)}
-        errs = validate_replacements(load_replacements(root), both)
+        all_reps = load_replacements(root)
+        errs = validate_replacements(all_reps, both)
+        record("replacements.json", errs,
+               ok=[f"{old} is replaced by {r['by']}, which is published or submitted" for old, r in sorted(all_reps.items())]
+               or ["No replacements listed"],
+               title=f"{len(all_reps)} replacement{'' if len(all_reps) == 1 else 's'}, all valid")
         for e in errs:
             print(f"  FAIL  {e}")
         if not errs:
@@ -1118,9 +1172,11 @@ def cmd_validate(args):
             m = _load_json(path)
         except Exception as e:
             print(f"  FAIL  not valid JSON: {e}")
+            record("Manifest rules", [f"{os.path.relpath(path, root)} isn't valid JSON: {e}"])
             failures += 1
             continue
 
+        who = f"{m.get('id')} {m.get('version')}: " if len(files) > 1 else ""
         errs = validate_structure(m)
         warns = []
         if not errs:
@@ -1133,12 +1189,22 @@ def cmd_validate(args):
                             f"both would install to one folder")
         if not errs and (floor := version_floor_error(m, known)):
             errs = [floor]
+        record("Manifest rules", errs, who=who, ok=errs or _rules_confirmed(m, known),
+               title=f"{m.get('id')} {m.get('version')} follows the manifest rules")
         if not errs:
             errs, warns = validate_dependency_targets(m, known)
             lib_errs, lib_warns = library_problems(m, known)
             errs += lib_errs
             warns += lib_warns
+            deps = m["dependencies"]
+            libs = {lib["filename"]: lib["sha256"] for a in m["artifacts"] for lib in a["library_dependencies"]}
+            record("Dependencies and libraries", errs, warns, who,
+                   ok=[f"Needs {d} {v} or later{'' if d in known else ', from another source'}" for d, v in sorted(deps.items())]
+                   + [f"Library {f}, sha256 {sha[:12]}..." for f, sha in sorted(libs.items())]
+                   or ["No dependencies or libraries"],
+                   title=f"{len(deps)} dependenc{'y' if len(deps) == 1 else 'ies'}, {len(libs)} librar{'y' if len(libs) == 1 else 'ies'}")
         if not errs:
+            file_errs, file_warns, vt_errs, vt_warns, verified = [], [], [], [], []
             for i, art in enumerate(m["artifacts"]):
                 label = f"artifacts[{i}] ({'+'.join(art['targets'])})"
                 checks = [(art, label, True)] + [
@@ -1147,12 +1213,26 @@ def cmd_validate(args):
                 for obj, what, allow_zip in checks:
                     e, w = _check_file(obj["download_url"], obj["sha256"], api_key,
                                        args.vt_max_malicious, what, allow_zip, vt_seen,
-                                       args.require_vt)
-                    errs += e
-                    warns += w
-            for icon in m.get("icons") or []:
-                if problem := icon_problem(icon["url"], icon["size"]):
-                    errs.append(f"icon {icon['size']}: {problem}")
+                                       args.require_vt, vt=(vt_errs, vt_warns))
+                    file_errs += e
+                    file_warns += w
+                    if not e:
+                        verified.append(f"{what}: {posixpath.basename(urlparse(obj['download_url']).path)} "
+                                        f"downloaded, sha256 {obj['sha256'][:12]}... matches")
+            record("Files match their hashes", file_errs, file_warns, who, ok=verified,
+                   title=f"{len(verified)} file{'' if len(verified) == 1 else 's'} downloaded and verified")
+            if vt_errs or vt_warns:
+                clean = sum(1 for n in vt_warns if "VirusTotal clean" in n)
+                record("VirusTotal scan", vt_errs, vt_warns, who,
+                       title=f"{clean} file{'' if clean == 1 else 's'} clean" if clean else "Not scanned")
+            icon_errs = [f"icon {icon['size']}: {problem}" for icon in m.get("icons") or []
+                         if (problem := icon_problem(icon["url"], icon["size"]))]
+            if m.get("icons"):
+                icons = sorted(i["size"] for i in m["icons"])
+                record("Icons", icon_errs, who=who, ok=[f"Icon {n}: a {n} x {n} px PNG" for n in icons],
+                       title=f"{len(icons)} icon{'' if len(icons) == 1 else 's'}, each the size it says")
+            errs = file_errs + vt_errs + icon_errs
+            warns += file_warns + vt_warns
 
         for w in warns:
             print(f"  note  {w}")
@@ -1459,6 +1539,8 @@ def main(argv=None):
                    help="fail if VirusTotal malicious count exceeds this (default: report only)")
     v.add_argument("--require-vt", action="store_true",
                    help="fail when a VirusTotal scan can't run, as CI does")
+    v.add_argument("--report", metavar="FILE",
+                   help="also write each check's outcome to FILE as JSON, for CI to show as separate checks")
     v.set_defaults(func=cmd_validate)
 
     b = sub.add_parser("build", help="compile pointers + repository.json")

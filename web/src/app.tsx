@@ -28,7 +28,7 @@ export function App() {
     addEventListener("hashchange", onHash)
     return () => removeEventListener("hashchange", onHash)
   }, [])
-  useEffect(() => { document.title = `${ROUTES[route].title} | The Modding Tavern` }, [route])
+  useEffect(() => { document.title = `${ROUTES[route].title} - The Modding Tavern` }, [route])
   const { Page } = ROUTES[route]
   return <Page />
 }
