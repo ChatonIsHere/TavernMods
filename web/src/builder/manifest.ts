@@ -13,6 +13,7 @@ export const REPO_RE = /^[A-Za-z0-9._-]{1,100}$/
 const VERSION_RE = /^\d+\.\d+\.\d+$/
 const SHA_RE = /^[0-9a-f]{64}$/
 const SHOT_RE = /\.(png|jpe?g|webp|gif)$/i
+export const ICON_SIZES = [128, 256, 512] as const
 
 // The index this page belongs to: <owner>.github.io/<repo>/ on Pages, else the default.
 export const INDEX = (() => {
@@ -36,6 +37,7 @@ export interface State {
   parity: boolean
   scenes: string[]
   dependencies: Dependency[]
+  icons: Record<number, string>   // size -> link
   screenshots: string[]
   artifacts: Artifact[]
 }
@@ -46,7 +48,7 @@ export const blankArtifact = (): Artifact => ({ targets: [], download_url: "", s
 export const blankLibrary = (): Library => ({ name: "", download_url: "", sha256: "", filename: "" })
 export const blankState = (): State => ({
   owner: "", repo: "", version: "", name: "", author: "", description: "",
-  parity: true, scenes: [], dependencies: [], screenshots: [], artifacts: [blankArtifact()],
+  parity: true, scenes: [], dependencies: [], icons: {}, screenshots: [], artifacts: [blankArtifact()],
 })
 
 type VKey = number[]
@@ -67,6 +69,8 @@ export function manifest(s: State) {
     manifest_version: 2, id: modId(s), name: s.name || modId(s), version: s.version,
     author: s.author || s.owner, description: s.description,
   }
+  const icons = ICON_SIZES.filter((n) => s.icons[n]).map((n) => ({ size: n, url: s.icons[n] }))
+  if (icons.length) m.icons = icons
   const shots = s.screenshots.filter(Boolean)
   if (shots.length) m.screenshots = shots
   m.parity_required = s.parity
@@ -81,7 +85,7 @@ export function manifest(s: State) {
       filename: l.filename || basename(l.download_url),
     })),
   }))
-  return m as { artifacts: Artifact[]; screenshots?: string[] } & Record<string, unknown>
+  return m as { artifacts: Artifact[]; icons?: { size: number; url: string }[]; screenshots?: string[] } & Record<string, unknown>
 }
 
 export const manifestText = (s: State) => JSON.stringify(manifest(s), null, 2) + "\n"
@@ -96,6 +100,16 @@ function ownedBy(s: State, url: string) {
     return u.protocol === "https:" && u.hostname.toLowerCase() === "github.com" && parts.length === 6
       && parts[0].toLowerCase() === s.owner.toLowerCase() && parts[1].toLowerCase() === s.repo.toLowerCase()
       && parts[2] === "releases" && parts[3] === "download"
+  } catch { return false }
+}
+// Mirrors _image_url_error in tools/modindex.py: the mod's own repo, and immutable.
+function imageHosted(s: State, url: string) {
+  try {
+    const u = new URL(url), parts = u.pathname.split("/").filter(Boolean)
+    if (u.protocol !== "https:" || parts.length < 3 || parts[0].toLowerCase() !== s.owner.toLowerCase()
+      || parts[1].toLowerCase() !== s.repo.toLowerCase()) return false
+    const host = u.hostname.toLowerCase()
+    return host === "github.com" ? ownedBy(s, url) : host === "raw.githubusercontent.com" && /^[0-9a-f]{40}$/.test(parts[2])
   } catch { return false }
 }
 const versionProblem = (v: string, what: string) => !VERSION_RE.test(v) ? `${what} must be MAJOR.MINOR.PATCH, like 1.0.0.`
@@ -154,6 +168,10 @@ export function problems(s: State, mods: IndexMods | null) {
       else if (!SHA_RE.test(l.sha256)) out.push(`${ln}'s SHA-256 must be 64 lowercase hex characters.`)
     })
   })
+  ;(m.icons || []).forEach(({ size, url }) => {
+    if (!imageHosted(s, url) || !/\.png$/i.test(new URL(url).pathname))
+      out.push(`The ${size} px icon must be a .png release asset of your repo, or a raw.githubusercontent.com link to it pinned to a commit.`)
+  })
   ;(m.screenshots || []).forEach((u, i) => {
     if (!isHttps(u) || !SHOT_RE.test(new URL(u).pathname)) out.push(`Screenshot ${i + 1} must be an https:// .png, .jpg, .webp or .gif link.`)
   })
@@ -172,6 +190,8 @@ export function loadManifest(m: any): State {
     parity: m.parity_required !== false,
     scenes: Array.isArray(m.scenes) ? m.scenes.filter((x: string) => SCENES.some(([k]) => k === x)) : [],
     dependencies: Object.entries(m.dependencies || {}).map(([id, version]) => ({ id, version: String(version) })),
+    icons: Object.fromEntries((Array.isArray(m.icons) ? m.icons : [])
+      .filter((i: any) => ICON_SIZES.includes(i?.size) && typeof i.url === "string").map((i: any) => [i.size, i.url])),
     screenshots: Array.isArray(m.screenshots) ? m.screenshots.slice(0, 4) : [],
     artifacts: m.artifacts.map((a: any) => ({
       targets: TARGETS.map(([t]) => t as string).filter((t) => (a.targets || []).includes(t)),

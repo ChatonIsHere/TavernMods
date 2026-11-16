@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { AddButton, CheckRow, Field, HashButton, Hint, Item, RemoveButton, Section, Status } from "./fields"
 import {
-  blankArtifact, blankLibrary, blankState, fileName, fillFromRelease, INDEX, type IndexMods, loadManifest,
+  blankArtifact, blankLibrary, blankState, fileName, fillFromRelease, ICON_SIZES, INDEX, type IndexMods, loadManifest,
   manifestText, modId, problems, publishedOf, RAW, REPO_RE, SCENES, type State, splitId, submissionPath,
   TARGETS, USER_RE,
 } from "./manifest"
@@ -323,6 +323,15 @@ export function Builder() {
                 )
               })}
               <AddButton onClick={() => edit((s) => { s.dependencies.push({ id: "", version: "" }) })}>Add dependency</AddButton>
+            </Section>
+
+            <Section title="Icons" hint="Optional square PNGs, shown in the launcher and on the mod page. Give all three sizes if you can. Hosted like screenshots: a release asset of your repo, or a raw.githubusercontent.com link pinned to a commit.">
+              <div className="flex flex-wrap items-end gap-2">
+                {ICON_SIZES.map((n) => (
+                  <Field key={n} label={`${n} × ${n} px`} className="flex-[1_1_14rem]" value={state.icons[n] || ""}
+                    onChange={(v) => edit((s) => { s.icons[n] = v.trim() })} />
+                ))}
+              </div>
             </Section>
 
             <Section title="Screenshots" hint="Optional, up to 4, shown on the mod page. A release asset of your repo, or a raw.githubusercontent.com link pinned to a commit; .png, .jpg, .webp or .gif.">

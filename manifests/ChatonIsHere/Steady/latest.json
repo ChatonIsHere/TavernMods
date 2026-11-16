@@ -1,0 +1,22 @@
+{
+  "manifest_version": 2,
+  "id": "ChatonIsHere.Steady",
+  "name": "Steady",
+  "version": "26.11.2",
+  "author": "ChatonIsHere",
+  "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates and saves, and less memory held. Gameplay is unchanged.",
+  "parity_required": false,
+  "dependencies": {},
+  "artifacts": [
+    {
+      "targets": [
+        "client_windows",
+        "server"
+      ],
+      "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.2/Steady.dll",
+      "sha256": "dd4133c9067714ff57c629284e73f4c54fce296bb19e1fe8ac2bde48b8b8ff5a",
+      "package": "dll",
+      "library_dependencies": []
+    }
+  ]
+}

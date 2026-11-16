@@ -7,7 +7,7 @@
       "name": "tavern-theme",
       "type": "registry:theme",
       "title": "Tavern",
-      "description": "The Modding Tavern dark theme: TavernLauncher's warm palette, tuned to WCAG AA (every text colour 5:1 or more on every surface, 3:1 input borders, a solid focus ring), its fonts (Georgia headings, Segoe UI text, Consolas code), and colour-blind-safe chart and status colours.",
+      "description": "The Modding Tavern dark theme: TavernLauncher's warm palette, tuned to WCAG AA (every text colour 5:1 or more on every surface, 3:1 input borders, a solid focus ring), its fonts (Georgia headings, Segoe UI text, Consolas code), colour-blind-safe chart and status colours, and a compact 14px base (87.5% of the reader's default) so text and spacing scale together.",
       "cssVars": {
         "theme": {
           "font-sans": "\"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif",
@@ -120,10 +120,11 @@
       "css": {
         "@layer base": {
           "html": {
-            "color-scheme": "dark"
+            "color-scheme": "dark",
+            "font-size": "87.5%"
           },
           "body": {
-            "line-height": "1.6",
+            "line-height": "1.5",
             "-webkit-font-smoothing": "antialiased"
           },
           "h1, h2, h3, h4": {

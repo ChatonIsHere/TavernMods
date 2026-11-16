@@ -2,14 +2,15 @@ import { cn } from "@/lib/utils"
 
 const PAGES = [
   { key: "mods", href: "./", label: "Mods" },
+  { key: "modlist", href: "modlist.html", label: "Server modlist" },
   { key: "builder", href: "builder.html", label: "Manifest builder" },
 ] as const
 
-// The bar both pages share: the site's name and a link to each page.
+// The bar every page shares: the site's name and a link to each page.
 export function SiteHeader({ current }: { current: (typeof PAGES)[number]["key"] }) {
   return (
     <header className="border-b bg-card">
-      <nav aria-label="Site" className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
+      <nav aria-label="Site" className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
         <span className="font-heading text-lg font-bold text-primary">The Modding Tavern</span>
         <ul className="flex flex-wrap gap-x-1">
           {PAGES.map((p) => (

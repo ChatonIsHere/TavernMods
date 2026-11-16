@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { type Mod, text } from "@/lib/mods"
 import { cn } from "@/lib/utils"
-import { ModBadges, ModByline, ModName } from "./mod-parts"
+import { ModBadges, ModByline, ModIcon, ModName } from "./mod-parts"
 
 function ModCard({ mod }: { mod: Mod }) {
   const shot = (mod.screenshots || [])[0]
@@ -10,11 +10,14 @@ function ModCard({ mod }: { mod: Mod }) {
       <div className="grid aspect-video place-items-center border-b bg-muted text-center">
         {shot ? (
           <img loading="lazy" alt="" src={shot} className="size-full object-cover" />
+        ) : mod.icons?.length ? (
+          <ModIcon mod={mod} size={128} />
         ) : (
           <span aria-hidden className="p-3 font-heading text-lg font-bold wrap-anywhere text-primary">{text(mod.name)}</span>
         )}
       </div>
-      <CardHeader>
+      <CardHeader className={cn(shot && mod.icons?.length && "grid-cols-[auto_1fr] gap-x-3")}>
+        {shot && <ModIcon mod={mod} size={40} className="row-span-2" />}
         <CardTitle>
           <h2 className="text-lg font-bold wrap-anywhere">
             <ModName mod={mod} />

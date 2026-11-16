@@ -36,6 +36,7 @@ A target is the build a process runs, not a game scene.
         "name": "Example Mod",
         "author": "ExampleDev",
         "description": "Does something useful.",
+        "icons": [{ "size": 128, "url": "https://..." }],  // only when set
         "parity_required": true,
         "targets": ["client_windows", "server"],
         "scenes": ["normal", "quest"],   // only when set
@@ -53,7 +54,7 @@ A target is the build a process runs, not a game scene.
 ```
 
 - A reader skips the whole file unless `index_version` is `2`. It is versioned separately from `manifest_version`.
-- Every field but `versions` comes from the highest release in that major, in the key order shown. `targets` is the sorted union of that release's artifact targets.
+- Every field but `versions` comes from the highest release in that major, in the key order shown. `targets` is the sorted union of that release's artifact targets. `icons` is sorted by size.
 - The default install is `max(versions)`.
 - A reader ignores a `replaced` entry that isn't an object with a string `by` naming a different id. `note` is optional text.
 
@@ -69,6 +70,10 @@ The `<version>.json` and `latest*.json` files.
   "version": "1.2.0",
   "author": "ExampleDev",
   "description": "Does something useful.",
+  "icons": [
+    { "size": 128, "url": "https://raw.githubusercontent.com/ExampleDev/ExampleMod/<commit sha>/icon-128.png" },
+    { "size": 256, "url": "https://raw.githubusercontent.com/ExampleDev/ExampleMod/<commit sha>/icon-256.png" }
+  ],
   "parity_required": true,
   "scenes": ["normal", "quest"],
   "dependencies": { "SomeDev.UtilKit": "1.2.0" },
@@ -98,7 +103,7 @@ The `<version>.json` and `latest*.json` files.
 }
 ```
 
-Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `description`, `screenshots`, `parity_required`, `scenes`, `dependencies`, `artifacts`. Artifact: `targets`, `download_url`, `sha256`, `package`, `library_dependencies`. Library: `name`, `download_url`, `sha256`, `filename`.
+Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `description`, `icons`, `screenshots`, `parity_required`, `scenes`, `dependencies`, `artifacts`. Artifact: `targets`, `download_url`, `sha256`, `package`, `library_dependencies`. Library: `name`, `download_url`, `sha256`, `filename`. Icon: `size`, `url`.
 
 | Field | Rule |
 | --- | --- |
@@ -108,6 +113,7 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | `version` | `MAJOR.MINOR.PATCH`: three segments of ASCII digits, each at most 2147483647. No suffix. |
 | `author` | Defaults to the text before the first dot in `id`. |
 | `description` | Free text. |
+| `icons` | Optional non-empty list of `{"size", "url"}`, one per size, sizes out of `128`, `256` and `512`. Each `url` is a square PNG of that size, at most 1 MB, under the same rules as `screenshots`. Launchers and pages pick the size that suits; the index carries them for browsing. |
 | `screenshots` | Optional list of image URLs for this repo's page. Installers ignore it. |
 | `parity_required` | Required boolean: whether a player needs this mod, at the server's exact version, to join a server running it. It compares versions, not files, so separate client and server artifacts don't affect it. Readers refuse a missing or non-boolean value. See [Joining a server](#joining-a-server). |
 | `scenes` | Optional non-empty list of distinct scenes the mod works in, out of `normal`, `quest`, `tutorial`. Absent or `null` means all. |
@@ -175,7 +181,7 @@ There is no mod-level `filename`. `name`, `author`, `description` and the librar
 }
 ```
 
-- **Keys** in exactly this order. `scenes` only when set. `artifacts` is the manifest's, verbatim and in order, with compiled key order. `screenshots` is never copied.
+- **Keys** in exactly this order. `scenes` only when set. `artifacts` is the manifest's, verbatim and in order, with compiled key order. `icons` and `screenshots` are never copied.
 - **`installed`** has one entry per installed target, keys sorted. Each holds the artifact's `sha256`; `libraries`, its library `filename`s in manifest order (used to reference-count `UserLibs/`); and `files`, `{path: sha256}` for every file in the target folder, paths relative with `/`, hashes lowercase, keys sorted by ordinal (code-unit) order.
 - **Formatting:** two-space indent, `": "` after keys, non-ASCII escaped as lowercase `\uXXXX`, CRLF line endings, no trailing newline.
 - **Install** of target T:

@@ -33,6 +33,24 @@ export function ModName({ mod }: { mod: Mod }) {
   )
 }
 
+// The mod's icon at size px, letting the browser pick the file; nothing when it has none.
+export function ModIcon({ mod, size, className }: { mod: Mod; size: number; className?: string }) {
+  const icons = (mod.icons || []).filter((i) => i && typeof i.url === "string")
+  if (!icons.length) return null
+  return (
+    <img
+      alt=""
+      loading="lazy"
+      width={size}
+      height={size}
+      src={icons[0].url}
+      srcSet={icons.map((i) => `${i.url} ${i.size}w`).join(", ")}
+      sizes={`${size}px`}
+      className={cn("shrink-0", className)}
+    />
+  )
+}
+
 export function ModByline({ mod, className }: { mod: Mod; className?: string }) {
   return (
     <p className={cn("text-sm text-muted-foreground", className)}>
