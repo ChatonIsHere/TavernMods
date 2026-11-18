@@ -29,6 +29,7 @@
       ],
       "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.6/Steady.dll",
       "sha256": "f63d6e81fbc4e9d546d2f20954cb9010a397a3451fc64b53ebc9e9e2fec68665",
+      "package": "dll",
       "library_dependencies": []
     }
   ]
