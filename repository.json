@@ -137,7 +137,7 @@
       "26": {
         "name": "Steady",
         "author": "ChatonIsHere",
-        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Gameplay is unchanged.",
+        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Alta's dead web services are cut off, so nothing waits on them. Gameplay is unchanged.",
         "icons": [
           {
             "size": 128,
@@ -160,7 +160,8 @@
         "versions": [
           "26.11.2",
           "26.11.3",
-          "26.11.4"
+          "26.11.4",
+          "26.11.5"
         ]
       }
     },
