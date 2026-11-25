@@ -2,9 +2,9 @@
   "manifest_version": 2,
   "id": "ChatonIsHere.Steady",
   "name": "Steady",
-  "version": "26.11.3",
+  "version": "26.11.7",
   "author": "ChatonIsHere",
-  "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Gameplay is unchanged.",
+  "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Alta's dead web services are cut off, so nothing waits on them. Gameplay is unchanged.",
   "icons": [
     {
       "size": 128,
@@ -27,8 +27,8 @@
         "client_windows",
         "server"
       ],
-      "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.3/Steady.dll",
-      "sha256": "b2a6183c296cb58c79dd028fac3ae7c8f29f0f4a8a2a1cee681036e004e473cf",
+      "download_url": "https://github.com/ChatonIsHere/Steady/releases/download/v26.11.7/Steady.dll",
+      "sha256": "8e47af7cb99819c69a212d66928af242fd669d70b678cb0640eb5d077fea71e7",
       "package": "dll",
       "library_dependencies": []
     }

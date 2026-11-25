@@ -31,6 +31,21 @@
         ]
       }
     },
+    "CG-Nik.CustomRecipesAPI": {
+      "8": {
+        "name": "CustomRecipesAPI",
+        "author": "CG-Nik",
+        "description": "An API mod for A Township Tale that lets other mods add custom moulds and smelting recipes.",
+        "parity_required": true,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "8.0.0"
+        ]
+      }
+    },
     "CG-Nik.DyeingAPI": {
       "8": {
         "name": "DyeingAPI",
@@ -58,6 +73,21 @@
         ],
         "versions": [
           "2.0.0"
+        ]
+      }
+    },
+    "CG-Nik.MetalHandleMoulds": {
+      "6": {
+        "name": "MetalHandleMoulds",
+        "author": "CG-Nik",
+        "description": "Adds moulds for the seven metal handles, found as loot or made as temporary moulds at the Standard Mould Press.",
+        "parity_required": true,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "6.0.0"
         ]
       }
     },
@@ -107,7 +137,7 @@
       "26": {
         "name": "Steady",
         "author": "ChatonIsHere",
-        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Gameplay is unchanged.",
+        "description": "Makes servers (and, a little, clients) run smoother: no forced garbage-collection freezes, faster navmesh updates, pathfinding and saves, chunk loading spread over frames, and less memory held. Alta's dead web services are cut off, so nothing waits on them. Gameplay is unchanged.",
         "icons": [
           {
             "size": 128,
@@ -129,7 +159,41 @@
         ],
         "versions": [
           "26.11.2",
-          "26.11.3"
+          "26.11.3",
+          "26.11.4",
+          "26.11.5",
+          "26.11.6",
+          "26.11.7"
+        ]
+      }
+    },
+    "ChatonIsHere.TavernEssentials": {
+      "0": {
+        "name": "TavernEssentials (mod manager test)",
+        "author": "ChatonIsHere",
+        "description": "Test build of TavernEssentials for the mod manager: board joins send your mods, so servers that require mods let you in, and a join refused for missing mods says why. Use it instead of TavernEssentials, not beside it.",
+        "parity_required": false,
+        "targets": [
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "0.14.1",
+          "0.14.2"
+        ]
+      }
+    },
+    "Cheeto35.CheetosOreSpawnFix": {
+      "1": {
+        "name": "CheetosOreSpawnFix",
+        "author": "Cheeto35",
+        "description": "Stops mines and the quarry going bad: keeps each level's ore mix, frees boulders sunk in the rock, moves unreachable nodes and makes mined crystals respawn. Server only.",
+        "parity_required": false,
+        "targets": [
+          "server"
+        ],
+        "versions": [
+          "1.1.3"
         ]
       }
     },
@@ -145,6 +209,22 @@
         ],
         "versions": [
           "1.4.0"
+        ]
+      }
+    },
+    "Circl-NoE.EnoughIron": {
+      "1": {
+        "name": "Enough Iron!",
+        "author": "Circl-NoE",
+        "description": "Lets metal handles and metal shields be any metal instead of always looking like iron, and spawn in different metals in the mines.",
+        "parity_required": true,
+        "targets": [
+          "client_android",
+          "client_windows",
+          "server"
+        ],
+        "versions": [
+          "1.0.2"
         ]
       }
     },
