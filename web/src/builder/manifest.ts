@@ -46,8 +46,12 @@ export interface State {
   screenshots: string[]
   artifacts: Artifact[]
 }
-// repository.json's "mods": id -> major -> { versions, ... }
-export type IndexMods = Record<string, Record<string, { versions?: string[] }>>
+// repository.json's "mods": id -> major -> what that major's highest version says.
+export interface IndexEntry { versions?: string[]; name?: string; author?: string; icons?: { size: number; url: string }[] }
+export type IndexMods = Record<string, Record<string, IndexEntry>>
+
+// One suggestion in a search field: the value it fills in, and how it's shown.
+export interface Choice { value: string; label?: string; detail?: string; icon?: string }
 
 export const blankArtifact = (): Artifact => ({ targets: [], download_url: "", sha256: "", library_dependencies: [] })
 export const blankLibrary = (): Library => ({ name: "", download_url: "", sha256: "", filename: "" })
@@ -64,6 +68,37 @@ export const publishedOf = (mods: IndexMods | null, id: string) => Object.values
   .flatMap((e) => e.versions || []).filter((v) => VERSION_RE.test(v)).sort((a, b) => vcmp(vkey(b), vkey(a)))
 
 export const splitId = (id: string) => id.split(/\.(.*)/s)
+
+// The newest major's entry, which says what the mod is called now.
+const newest = (mods: IndexMods, id: string) => {
+  const majors = Object.keys(mods[id] || {}).filter((m) => /^\d+$/.test(m)).sort((a, b) => Number(b) - Number(a))
+  return majors.length ? mods[id][majors[0]] : undefined
+}
+const smallIcon = (e?: IndexEntry) => (Array.isArray(e?.icons) ? [...e.icons].sort((a, b) => a.size - b.size)[0]?.url : undefined)
+
+// Every published mod but `except`, by name.
+export function modChoices(mods: IndexMods | null, except = ""): Choice[] {
+  return Object.keys(mods || {}).filter((id) => id.toLowerCase() !== except.toLowerCase()).map((id) => {
+    const e = newest(mods!, id), latest = publishedOf(mods, id)[0]
+    return { value: id, label: e?.name || id, detail: [e?.author && `by ${e.author}`, latest && `latest ${latest}`].filter(Boolean).join(", "), icon: smallIcon(e) }
+  }).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
+}
+
+// A mod's published versions, highest first.
+export const versionChoices = (mods: IndexMods | null, id: string): Choice[] =>
+  publishedOf(mods, id).map((v, i) => ({ value: v, detail: i === 0 ? "latest" : undefined }))
+
+export function ownerChoices(mods: IndexMods | null): Choice[] {
+  const count: Record<string, number> = {}
+  for (const id of Object.keys(mods || {})) count[splitId(id)[0]] = (count[splitId(id)[0]] || 0) + 1
+  return Object.keys(count).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .map((o) => ({ value: o, detail: `${count[o]} mod${count[o] === 1 ? "" : "s"}` }))
+}
+
+export const repoChoices = (mods: IndexMods | null, owner: string): Choice[] =>
+  Object.keys(mods || {}).filter((id) => !owner || splitId(id)[0].toLowerCase() === owner.toLowerCase())
+    .map((id) => ({ value: splitId(id)[1], label: splitId(id)[1], detail: newest(mods!, id)?.name, icon: smallIcon(newest(mods!, id)) }))
+    .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }))
 export const modId = (s: State) => `${s.owner}.${s.repo}`
 export const basename = (url: string) => {
   try { return decodeURIComponent(new URL(url).pathname.split("/").pop() || "") } catch { return "" }

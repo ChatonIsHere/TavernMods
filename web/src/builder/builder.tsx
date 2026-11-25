@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CircleAlertIcon, CircleCheckIcon } from "lucide-react"
 
 import { SiteHeader } from "@/components/site-header"
@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { AddButton, CheckRow, Field, HashButton, Hint, Item, RemoveButton, Section, Status } from "./fields"
+import { AddButton, CheckRow, Field, HashButton, Hint, Item, RemoveButton, SearchField, Section, Status } from "./fields"
 import {
   blankArtifact, blankLibrary, blankState, fileName, fillFromRelease, ICON_SIZES, INDEX, type IndexMods, loadManifest,
-  manifestText, modId, problems, publishedOf, RAW, REPO_RE, SCENES, type State, splitId, submissionPath,
-  TARGETS, USER_RE,
+  manifestText, modChoices, modId, ownerChoices, problems, publishedOf, RAW, repoChoices, REPO_RE, SCENES, type State,
+  submissionPath, TARGETS, USER_RE, versionChoices,
 } from "./manifest"
 
 const DOCS = `https://github.com/${INDEX.owner}/${INDEX.repo}/blob/${INDEX.branch}/docs/SUBMITTING.md`
@@ -30,10 +30,7 @@ function savedDraft(): State {
   return blankState()
 }
 
-const options = (values: string[]) => [...new Set(values)].sort().map((v) => <option key={v} value={v} />)
-
 export function Builder() {
-  const ids = { owners: useId(), repos: useId(), mods: useId() }
   const [state, setState] = useState<State>(savedDraft)
   const [indexMods, setIndexMods] = useState<IndexMods | null>(null)
   const [submitterInput, setSubmitterInput] = useState(() => stored("builder-submitter") || "")
@@ -65,7 +62,7 @@ export function Builder() {
   const canSubmit = !errors.length && !hashless.length && USER_RE.test(submitter)
   const validId = USER_RE.test(state.owner) && REPO_RE.test(state.repo)
   const published = validId ? publishedOf(indexMods, modId(state)) : []
-  const indexIds = Object.keys(indexMods || {}).map(splitId)
+  const otherMods = modChoices(indexMods, modId(state))
 
   // Each target can have only one build, so a target another build has is locked.
   const targetOwner: Record<string, number> = {}
@@ -154,9 +151,9 @@ export function Builder() {
                 load the published manifest.</>}
             >
               <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
-                <Field label="GitHub owner" value={state.owner} list={ids.owners} placeholder="YourGitHubUser"
+                <SearchField label="GitHub owner" value={state.owner} choices={ownerChoices(indexMods)} placeholder="YourGitHubUser"
                   onChange={(v) => edit((s) => { s.owner = v.trim() })} />
-                <Field label="GitHub repo" value={state.repo} list={ids.repos} placeholder="YourRepo"
+                <SearchField label="GitHub repo" value={state.repo} choices={repoChoices(indexMods, state.owner)} placeholder="YourRepo"
                   onChange={(v) => edit((s) => { s.repo = v.trim() })} />
                 <Field label="Version" value={state.version} placeholder="1.0.0"
                   onChange={(v) => edit((s) => { s.version = v.trim() })} />
@@ -171,11 +168,6 @@ export function Builder() {
                   the latest to start from it.
                 </Hint>
               )}
-              <datalist id={ids.owners}>{options(indexIds.map(([o]) => o))}</datalist>
-              <datalist id={ids.repos}>
-                {options(indexIds.filter(([o]) => !state.owner || o.toLowerCase() === state.owner.toLowerCase()).map(([, r]) => r))}
-              </datalist>
-              <datalist id={ids.mods}>{options(Object.keys(indexMods || {}))}</datalist>
               <Field label="Description" value={state.description} placeholder="One short line describing what the mod does."
                 onChange={(v) => edit((s) => { s.description = v })} />
               <Field label="What's new in this version (optional)" value={state.changelog}
@@ -317,10 +309,9 @@ export function Builder() {
 
             <Section title="Dependencies" hint="Other mods this one needs, by id and minimum version. Shared DLLs belong under a build's libraries instead.">
               {state.dependencies.map((d, i) => {
-                const versionsId = `${ids.mods}-dep-${i}`
                 return (
                   <div key={i} className="flex flex-wrap items-end gap-2">
-                    <Field label="Mod id" className="flex-[2_1_14rem]" value={d.id} list={ids.mods} placeholder="SomeDev.UtilKit"
+                    <SearchField label="Mod" className="flex-[2_1_14rem]" value={d.id} choices={otherMods} placeholder="Search by name, author or id"
                       onChange={(v) => edit((s) => {
                         // Picking a published mod fills in its latest version, if none is set yet.
                         const dep = s.dependencies[i]
@@ -328,9 +319,9 @@ export function Builder() {
                         const latest = publishedOf(indexMods, dep.id)[0]
                         if (latest && !dep.version) dep.version = latest
                       })} />
-                    <Field label="Minimum version" className="flex-[1_1_9rem]" value={d.version} list={versionsId} placeholder="1.0.0"
+                    <SearchField label="Minimum version" className="flex-[1_1_9rem]" value={d.version}
+                      choices={versionChoices(indexMods, d.id)} placeholder="1.0.0"
                       onChange={(v) => edit((s) => { s.dependencies[i].version = v.trim() })} />
-                    <datalist id={versionsId}>{publishedOf(indexMods, d.id).map((v) => <option key={v} value={v} />)}</datalist>
                     <RemoveButton what={`dependency ${i + 1}`} onClick={() => edit((s) => { s.dependencies.splice(i, 1) })} />
                   </div>
                 )
@@ -340,16 +331,15 @@ export function Builder() {
 
             <Section title="Doesn't work with" hint="Optional: mods in this repository that break alongside this one. The launcher warns anyone about to run them together, and the other mod's owner is told on your pull request. To say it's fixed, leave it out of your next release.">
               {state.incompatible.map((x, i) => {
-                const versionsId = `${ids.mods}-inc-${i}`
                 return (
                   <div key={i} className="flex flex-wrap items-end gap-2">
-                    <Field label="Mod id" className="flex-[2_1_14rem]" value={x.id} list={ids.mods} placeholder="SomeDev.DyeKit"
+                    <SearchField label="Mod" className="flex-[2_1_14rem]" value={x.id} choices={otherMods} placeholder="Search by name, author or id"
                       onChange={(v) => edit((s) => { s.incompatible[i].id = v.trim() })} />
                     <Field label="Why" className="flex-[3_1_18rem]" value={x.note} placeholder="Both patch dye vats."
                       onChange={(v) => edit((s) => { s.incompatible[i].note = v })} />
-                    <Field label="Works from (optional)" className="flex-[1_1_9rem]" value={x.below} list={versionsId} placeholder="2.0.0"
+                    <SearchField label="Works from (optional)" className="flex-[1_1_9rem]" value={x.below}
+                      choices={versionChoices(indexMods, x.id)} placeholder="2.0.0"
                       onChange={(v) => edit((s) => { s.incompatible[i].below = v.trim() })} />
-                    <datalist id={versionsId}>{publishedOf(indexMods, x.id).map((v) => <option key={v} value={v} />)}</datalist>
                     <RemoveButton what={`incompatibility ${i + 1}`} onClick={() => edit((s) => { s.incompatible.splice(i, 1) })} />
                   </div>
                 )

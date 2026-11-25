@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { sha256Of } from "./manifest"
+import { type Choice, sha256Of } from "./manifest"
 
 export function Hint({ className, ...props }: ComponentProps<"p">) {
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />
@@ -81,6 +81,75 @@ export function Field({ label, value, onChange, placeholder, mono, list, classNa
         onKeyDown={onEnter && ((e) => { if (e.key === "Enter") onEnter() })}
         className={cn("h-9 bg-background text-base md:text-base dark:bg-background", mono && "font-mono text-sm md:text-sm")}
       />
+    </div>
+  )
+}
+
+// A text field that suggests from `choices` as you type, searching their value, label and detail. Any text is
+// still allowed; the problem list says if it isn't one of them. Once the value is one of the choices, every
+// choice shows again, so another can be picked without clearing it.
+export function SearchField({ label, value, onChange, choices, placeholder, mono, className }:
+  Omit<FieldProps, "list" | "onEnter"> & { choices: Choice[] }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const q = value.trim().toLowerCase()
+  const shown = (!q || choices.some((c) => c.value === value) ? choices
+    : choices.filter((c) => [c.value, c.label, c.detail].some((t) => t?.toLowerCase().includes(q)))).slice(0, 50)
+  const expanded = open && shown.length > 0
+  const pick = (c: Choice) => { onChange(c.value); setOpen(false) }
+  return (
+    <div className={cn("relative grid min-w-0 content-start gap-1.5", className)}>
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={expanded}
+        aria-controls={`${id}-list`}
+        aria-activedescendant={expanded ? `${id}-${Math.min(active, shown.length - 1)}` : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0) }}
+        onFocus={() => { setOpen(true); setActive(0) }}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault()
+            setOpen(true)
+            if (shown.length) setActive((i) => (Math.min(i, shown.length - 1) + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length)
+          } else if (e.key === "Enter" && expanded) {
+            e.preventDefault()
+            pick(shown[Math.min(active, shown.length - 1)])
+          } else if (e.key === "Escape") setOpen(false)
+        }}
+        className={cn("h-9 bg-background text-base md:text-base dark:bg-background", mono && "font-mono text-sm md:text-sm")}
+      />
+      {expanded && (
+        <ul id={`${id}-list`} role="listbox" aria-label={label}
+          className="absolute top-full left-0 z-30 mt-1 max-h-72 w-full min-w-72 overflow-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
+          {shown.map((c, i) => (
+            <li key={c.value} id={`${id}-${i}`} role="option" aria-selected={i === Math.min(active, shown.length - 1)}
+              onMouseDown={(e) => { e.preventDefault(); pick(c) }}
+              onMouseEnter={() => setActive(i)}
+              className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5",
+                i === Math.min(active, shown.length - 1) && "bg-accent text-accent-foreground")}>
+              {c.icon && <img src={c.icon} alt="" className="size-6 shrink-0 rounded" loading="lazy" />}
+              <span className="min-w-0">
+                <span className="block truncate">{c.label || c.value}</span>
+                {(c.label && c.label !== c.value || c.detail) && (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[c.label && c.label !== c.value ? c.value : "", c.detail].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
