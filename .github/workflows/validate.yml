@@ -8,7 +8,8 @@ name: Validate submissions
 # downloader refuses non-https URLs and non-public hosts, at every redirect.
 #
 # Runs on every PR, so the required checks never wait on one that doesn't
-# run. A PR that changes neither submissions/ nor replacements.json passes in
+# run. A PR that changes neither submissions/ nor a repository list
+# (replacements.json, incompatibilities.json, withdrawn.json) passes in
 # seconds, with each part skipped and no comment.
 
 on:
@@ -36,7 +37,8 @@ jobs:
             const { owner, repo } = context.repo;
             const files = await github.paginate(github.rest.pulls.listFiles,
               { owner, repo, pull_number: pr.number, per_page: 100 });
-            if (!files.some(f => f.filename.startsWith('submissions/') || f.filename === 'replacements.json')) {
+            const lists = ['replacements.json', 'incompatibilities.json', 'withdrawn.json'];
+            if (!files.some(f => f.filename.startsWith('submissions/') || lists.includes(f.filename))) {
               core.setOutput('none', 'true');   // nothing to validate: every later part is skipped
               return;
             }
@@ -67,22 +69,24 @@ jobs:
               core.setOutput('file', added[0].filename);
             }
 
-      - name: Overlay the PR's submissions/ and replacements.json onto main
+      - name: Overlay the PR's submissions/ and repository lists onto main
         if: steps.shape.outputs.ok == 'true'
         env:
           PR_REF: refs/pull/${{ github.event.pull_request.number }}/head
           IS_FORK: ${{ steps.shape.outputs.fork }}
-        # A fork can't change replacements.json (the shape check above) and may
-        # be branched from an older main, so it is checked against main's copy.
+        # A fork can't change the lists (the shape check above) and may be
+        # branched from an older main, so it is checked against main's copies.
         run: |
           git fetch --no-tags --depth=1 origin "$PR_REF"
           git checkout FETCH_HEAD -- submissions
           if [ "$IS_FORK" != "true" ]; then
-            if git cat-file -e FETCH_HEAD:replacements.json 2>/dev/null; then
-              git checkout FETCH_HEAD -- replacements.json
-            else
-              rm -f replacements.json
-            fi
+            for list in replacements.json incompatibilities.json withdrawn.json; do
+              if git cat-file -e "FETCH_HEAD:$list" 2>/dev/null; then
+                git checkout FETCH_HEAD -- "$list"
+              else
+                rm -f "$list"
+              fi
+            done
           fi
 
       - name: Check who opened the PR (a fork PR must come from someone who works on the mod)
@@ -196,6 +200,12 @@ jobs:
                 ? '## Submission checks: PASSED\n\nA maintainer still reviews this before it can merge.' + submitter
                 : '## Submission checks: FAILED\n\nFix the items below and push to this PR. The checks run again on every push.'
                   + (owner ? '\n\n- ' + owner : submitter ? '\n\n' + submitter.trim() : '');
+              // What a maintainer should look at before approving. A note can quote submitted text, so it can't
+              // mention anyone, open HTML or code spans.
+              const report = fs.existsSync('report.json') ? JSON.parse(fs.readFileSync('report.json', 'utf8')) : {};
+              const plain = (t) => String(t).replace(/[`<>]/g, "'").replace(/@/g, '@\u200b');
+              const review = (report.review || []).map(plain);
+              if (review.length) head += '\n\n### For the reviewer\n\n' + review.map(n => '- ' + n).join('\n');
               details = '\n\n<details><summary>Validation output</summary>\n\n```\n' + output + '\n```\n\n</details>';
             }
             const body = marker + '\n' + head + details;
@@ -208,6 +218,31 @@ jobs:
               await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number: prNum, body });
+            }
+
+      # Only once every check passes. Editing a comment doesn't notify anyone it mentions, so each owner gets a
+      # comment of their own, once per PR. Logins come from mod ids, which the validator holds to GitHub's
+      # username rules.
+      - name: Tell the owners of mods this PR marks incompatible
+        if: always() && steps.validate.outputs.rc == '0' && steps.owner.outputs.ok != 'false'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('report.json')) return;
+            const mentions = JSON.parse(fs.readFileSync('report.json', 'utf8')).mentions || [];
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments,
+              { owner, repo, issue_number: pr.number, per_page: 100 });
+            for (const { login, mod, by } of mentions) {
+              if (!/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/.test(login) || login.toLowerCase() === pr.user.login.toLowerCase()) continue;
+              const marker = `<!-- modindex-incompatible:${login.toLowerCase()} -->`;
+              if (comments.some(c => c.body && c.body.includes(marker))) continue;
+              await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: marker + '\n' +
+                `@${login}: this PR marks your mod \`${mod}\` as not working with \`${by}\`. The reason is in the ` +
+                `checks comment above. If that's wrong, or a version of \`${mod}\` already works with it, say so ` +
+                `here before a maintainer merges it.` });
             }
 
       # The required check is this job; these show what passed and what didn't at a glance.
@@ -223,9 +258,9 @@ jobs:
             const { owner, repo } = context.repo;
             const head_sha = context.payload.pull_request.head.sha;
             if (process.env.NONE === 'true') {
-              const title = 'Nothing to check: this PR changes no submission or replacements.json';
-              for (const name of ['One submission file', 'Submitter works on the mod', 'replacements.json is valid', 'Manifest rules',
-                'Dependencies and libraries', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
+              const title = 'Nothing to check: this PR changes no submission or repository list';
+              for (const name of ['One submission file', 'Submitter works on the mod', 'Repository lists are valid', 'Manifest rules',
+                'Dependencies and libraries', 'Incompatibilities', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
                 await github.rest.checks.create({ owner, repo, name, head_sha, status: 'completed', conclusion: 'skipped',
                   output: { title, summary: title } });
               }
@@ -247,9 +282,10 @@ jobs:
             else if (process.env.IS_FORK !== 'true') add('Submitter works on the mod', 'neutral', 'Not checked: opened from a branch of this repo', [submitter]);
             else add('Submitter works on the mod', 'success', submitter || 'Checked');
 
-            const names = { 'replacements.json': 'replacements.json is valid' };
+            const names = { 'Repository lists': 'Repository lists are valid' };
             const conclusion = { pass: 'success', fail: 'failure', skipped: 'skipped' };
-            for (const part of ['replacements.json', 'Manifest rules', 'Dependencies and libraries', 'Files match their hashes', 'VirusTotal scan', 'Icons']) {
+            for (const part of ['Repository lists', 'Manifest rules', 'Dependencies and libraries', 'Incompatibilities', 'Files match their hashes',
+              'VirusTotal scan', 'Icons']) {
               const r = report[part] || { status: 'skipped', errors: [], notes: [], ok: [] };
               const title = r.status === 'fail' ? `${r.errors.length} problem${r.errors.length === 1 ? '' : 's'}`
                 : r.status === 'pass' ? (r.title || 'Passed') : 'Skipped: an earlier part failed, or there was nothing to check';

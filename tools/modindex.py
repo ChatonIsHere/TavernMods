@@ -5,9 +5,10 @@ modindex: validates TavernMods submissions and compiles the static index.
   fill-hashes [paths]   write the real sha256 of every artifact and library
   validate [paths]      check submissions, downloading and hashing every file
                         (VirusTotal too when VIRUSTOTAL_API_KEY is set)
-  build                 compile manifests/ and replacements.json into latest*.json
-                        and repository.json (--ingest moves submissions in first,
-                        --prune deletes them)
+  build                 compile manifests/, replacements.json, incompatibilities.json
+                        and withdrawn.json into latest*.json and repository.json
+                        (--ingest moves submissions in first, adding the
+                        incompatibilities they declare; --prune deletes them)
   site                  bake the built web/dist/index.html with the mod list into
                         site/index.html
 
@@ -49,8 +50,9 @@ SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 VERSION_SEGMENT_MAX = 2147483647   # TavernLib parses segments as Int32
 
 _MANIFEST_ORDER = [
-    "manifest_version", "id", "name", "version", "author", "description",
-    "icons", "screenshots", "parity_required", "scenes", "dependencies", "artifacts",
+    "manifest_version", "id", "name", "version", "author", "description", "changelog",
+    "icons", "screenshots", "parity_required", "scenes", "dependencies", "incompatible_with",
+    "artifacts",
 ]
 _ARTIFACT_ORDER = ["targets", "download_url", "sha256", "package", "library_dependencies"]
 _LIB_ORDER = ["name", "download_url", "sha256", "filename"]
@@ -110,6 +112,10 @@ _NON_SUBMISSION_BASENAMES = {"readme.json", "template.json"}
 
 REPLACEMENTS_FILE = "replacements.json"
 _REPLACEMENT_FIELDS = ("by", "note")
+INCOMPATIBILITIES_FILE = "incompatibilities.json"
+WITHDRAWN_FILE = "withdrawn.json"
+NOTE_MAX = 300           # an incompatibility's note, or a withdrawal's reason
+CHANGELOG_MAX = 2000
 
 
 class ValidationError(Exception):
@@ -241,6 +247,8 @@ def summary_entry(highest_manifest, versions_in_major):
     entry.update({"parity_required": parity_required(m), "targets": manifest_targets(m)})
     if m.get("scenes") is not None:
         entry["scenes"] = list(m["scenes"])
+    if m.get("changelog"):
+        entry["changelog"] = m["changelog"]
     entry["versions"] = versions_in_major
     return entry
 
@@ -308,6 +316,11 @@ def validate_structure(m, check_urls=True):
     for key, what in _V1_FIELDS.items():
         if key in m:
             errs.append(f"top-level {key} isn't part of manifest v2: it's {what}")
+    errs += _unknown_fields(m, set(_MANIFEST_ORDER) | set(_V1_FIELDS), "the manifest")
+
+    log = m.get("changelog")
+    if log is not None and (not isinstance(log, str) or not log.strip() or len(log) > CHANGELOG_MAX):
+        errs.append(f"changelog must be text of at most {CHANGELOG_MAX} characters, or left out")
 
     if "parity_required" not in m:
         errs.append("parity_required is required: true if a client joining a "
@@ -338,6 +351,7 @@ def validate_structure(m, check_urls=True):
             elif dep_id == mod_id:
                 errs.append(f"dependencies lists {dep_id!r}, the mod's own id; "
                             f"a mod can't depend on itself")
+    errs += _incompatible_with_errors(m.get("incompatible_with"), mod_id)
 
     arts = m.get("artifacts")
     if not isinstance(arts, list) or not arts:
@@ -347,6 +361,45 @@ def validate_structure(m, check_urls=True):
         claimed = {}     # target -> index of the artifact that lists it
         for i, a in enumerate(arts):
             errs += _artifact_errors(a, i, claimed, author, repo, check_urls)
+    return errs
+
+
+def _unknown_fields(obj, known, where):
+    # A misspelt optional field would otherwise be dropped without a word.
+    return [f"{where} has an unknown field {k!r}; check its spelling against docs/REPO_STRUCTURE.md"
+            for k in sorted(set(obj) - known)]
+
+
+def _note_error(note, what):
+    if not isinstance(note, str) or not note.strip() or len(note) > NOTE_MAX:
+        return f"{what} must be text of at most {NOTE_MAX} characters"
+    return None
+
+
+def _incompatible_with_errors(value, mod_id):
+    if value is None:
+        return []
+    if not isinstance(value, dict):
+        return ['incompatible_with must be an object of mod id -> {"note": why, "below": first '
+                'version of that mod that works}, or left out']
+    errs = []
+    for other, entry in value.items():
+        where = f"incompatible_with[{other!r}]"
+        try:
+            parse_id(other)
+        except ValidationError as e:
+            errs.append(f"{where} is not a valid mod id: {e}")
+            continue
+        if isinstance(mod_id, str) and other.casefold() == mod_id.casefold():
+            errs.append(f"{where} is the mod's own id")
+        if not isinstance(entry, dict):
+            errs.append(f'{where} must be an object with "note" and optionally "below"')
+            continue
+        errs += _unknown_fields(entry, {"note", "below"}, where)
+        if problem := _note_error(entry.get("note"), f"{where}.note"):
+            errs.append(problem)
+        if "below" in entry and (problem := _version_error(entry["below"], f"{where}.below")):
+            errs.append(problem)
     return errs
 
 
@@ -377,7 +430,7 @@ def _artifact_errors(a, i, claimed, author, repo, check_urls):
     where = f"artifacts[{i}]"
     if not isinstance(a, dict):
         return [f"{where} must be an object"]
-    errs = []
+    errs = _unknown_fields(a, set(_ARTIFACT_ORDER), where)
 
     targets = a.get("targets")
     if not isinstance(targets, list) or not targets:
@@ -428,6 +481,7 @@ def _artifact_errors(a, i, claimed, author, repo, check_urls):
         if not isinstance(lib, dict):
             errs.append(f"{lwhere} must be an object")
             continue
+        errs += _unknown_fields(lib, set(_LIB_ORDER), lwhere)
         if not isinstance(lib.get("name"), str) or not lib["name"]:
             errs.append(f"{lwhere}.name is required")
         if not _is_safe_basename(lib.get("filename")):
@@ -476,16 +530,22 @@ def _resolve_dep_in_repo(known, dep_id, min_version):
     return versions[max(candidates, key=_vkey)] if candidates else None
 
 
-def validate_dependency_targets(m, known):
+def validate_dependency_targets(m, known, withdrawn_too=None):
     """(errs, warns): a dependency sharing no target with m is an error, since
     per-target installs leave it out everywhere m runs. Partial overlap is only
-    a note: whether m's other builds work without it is for a reviewer."""
+    a note: whether m's other builds work without it is for a reviewer. With
+    known stripped of withdrawn versions, withdrawn_too (the unstripped known)
+    makes a dependency only withdrawn versions meet an error."""
     errs, warns = [], []
     mine = set(manifest_targets(m))
     for dep_id, min_version in sorted((m.get("dependencies") or {}).items()):
         if _version_error(min_version, "") is not None:
             continue        # validate_structure reports it
         dep = _resolve_dep_in_repo(known, dep_id, min_version)
+        if dep is None and withdrawn_too and _resolve_dep_in_repo(withdrawn_too, dep_id, min_version):
+            errs.append(f"dependency {dep_id} >= {min_version}: every version that meets it has "
+                        f"been withdrawn; depend on a later one")
+            continue
         if dep is None:
             warns.append(
                 f"dependency {dep_id} >= {min_version} isn't in this repository, "
@@ -635,6 +695,183 @@ def library_problems(m, known):
                     warns.append(f"library {lib['filename']} is pinned at another sha256 by "
                                  f"{mod_id} {version}, so the two can't be installed together")
     return errs, sorted(set(warns))
+
+
+def _load_list_file(root, name, kind):
+    """A maintained file's JSON, kind() when there is none."""
+    path = os.path.join(root, name)
+    if not os.path.isfile(path):
+        return kind()
+    try:
+        data = _load_json(path)
+    except ValueError as e:
+        raise ValidationError(f"{name} is not valid JSON: {e}")
+    if not isinstance(data, kind):
+        raise ValidationError(f"{name} must be a JSON {'list' if kind is list else 'object'}")
+    return data
+
+
+def load_incompatibilities(root):
+    """incompatibilities.json: [{"mods": {id: {} or {"below": version}, other id: ...}, "note": text}].
+    Maintainers edit it; ingest adds what merged manifests declare (declare_incompatibilities)."""
+    return _load_list_file(root, INCOMPATIBILITIES_FILE, list)
+
+
+def load_withdrawn(root):
+    """withdrawn.json: {id: {version: reason}}. Maintainers edit it."""
+    return _load_list_file(root, WITHDRAWN_FILE, dict)
+
+
+def _pair_key(ids):
+    return frozenset(i.casefold() for i in ids)
+
+
+def _find_pair(incs, a, b):
+    key = _pair_key((a, b))
+    return next((e for e in incs if isinstance(e, dict) and isinstance(e.get("mods"), dict)
+                 and _pair_key(e["mods"]) == key), None)
+
+
+def _side(entry, mod_id):
+    """mod_id's half of a pair entry, matched ignoring case; None if malformed."""
+    side = next((v for k, v in entry["mods"].items() if k.casefold() == mod_id.casefold()), None)
+    return side if isinstance(side, dict) else None
+
+
+def validate_incompatibilities(incs, mods, reps):
+    """Errors in incompatibilities.json against mods ({id: {version: manifest}}): each
+    entry names two different published, unreplaced mods, once, with a note."""
+    errs, seen = [], set()
+    for i, entry in enumerate(incs):
+        where = f"{INCOMPATIBILITIES_FILE}[{i}]"
+        if not isinstance(entry, dict):
+            errs.append(f'{where} must be an object with "mods" and "note"')
+            continue
+        pair = entry.get("mods")
+        if not isinstance(pair, dict) or len(pair) != 2 or len(_pair_key(pair)) != 2:
+            errs.append(f'{where}: "mods" must name two different mods, each id -> {{}} or '
+                        f'{{"below": the first version that works}}')
+            continue
+        ids = sorted(pair)
+        where = f"{INCOMPATIBILITIES_FILE}: {ids[0]} and {ids[1]}"
+        errs += [f"{where}: {e}" for e in _unknown_fields(entry, {"mods", "note"}, "the entry")]
+        if problem := _note_error(entry.get("note"), "note"):
+            errs.append(f"{where}: {problem}")
+        if _pair_key(ids) in seen:
+            errs.append(f"{where}: listed more than once")
+        seen.add(_pair_key(ids))
+        for mod_id in ids:
+            side = pair[mod_id]
+            if mod_id in reps:
+                errs.append(f"{where}: {mod_id} has been replaced by {reps[mod_id].get('by')}; "
+                            f"name that instead")
+            elif mod_id not in mods:
+                errs.append(f"{where}: {mod_id} isn't published here")
+            if not isinstance(side, dict):
+                errs.append(f'{where}: {mod_id} must map to {{}} or {{"below": version}}')
+                continue
+            errs += [f"{where}: {e}" for e in _unknown_fields(side, {"below"}, mod_id)]
+            if "below" in side and (problem := _version_error(side["below"], f"{mod_id}'s below")):
+                errs.append(f"{where}: {problem}")
+    return errs
+
+
+def validate_withdrawn(wd, mods):
+    """Errors in withdrawn.json: each entry is a published version, with a reason."""
+    errs = []
+    for mod_id, versions in sorted(wd.items()):
+        where = f"{WITHDRAWN_FILE}: {mod_id}"
+        if mod_id not in mods:
+            errs.append(f"{where}: no such mod is published here")
+            continue
+        if not isinstance(versions, dict) or not versions:
+            errs.append(f"{where}: must be an object of version -> reason")
+            continue
+        for version, reason in sorted(versions.items()):
+            if version not in mods[mod_id]:
+                errs.append(f"{where} {version}: no such version is published here")
+            if problem := _note_error(reason, "the reason"):
+                errs.append(f"{where} {version}: {problem}")
+    return errs
+
+
+def without_withdrawn(mods, wd):
+    """mods ({id: {version: manifest}}) without withdrawn versions, nor mods left with none."""
+    out = {}
+    for mod_id, versions in mods.items():
+        gone = wd.get(mod_id)
+        gone = gone if isinstance(gone, dict) else {}
+        live = {v: m for v, m in versions.items() if v not in gone}
+        if live:
+            out[mod_id] = live
+    return out
+
+
+def incompatibility_errors(m, known, reps, submitted):
+    """Why what m's incompatible_with names can't be listed: each must be a mod in this
+    repository (or this PR) under its current id, and not one m depends on."""
+    errs = []
+    deps = {d.casefold() for d in m.get("dependencies") or {}}
+    for other in sorted(m.get("incompatible_with") or {}):
+        if other in reps:
+            errs.append(f"incompatible_with names {other}, which has been replaced by "
+                        f"{reps[other].get('by')}; name that instead")
+        elif other not in known and other not in submitted:
+            errs.append(f"incompatible_with names {other}, which isn't in this repository "
+                        f"(ids are case-sensitive)")
+        if other.casefold() in deps:
+            errs.append(f"incompatible_with names {other}, which this mod depends on")
+    return errs
+
+
+def declare_incompatibilities(m, known, incs):
+    """Applies m's incompatible_with to incs (changed in place), as ingest does once m is
+    merged: a pair for each mod it names, with its note and below. When m is its mod's
+    new highest version, a pair its previous highest named and m doesn't is marked
+    fixed from m's version. Returns (notes for the reviewer, [(GitHub owner, mod id)] of
+    other owners' mods newly paired with m). A pair a maintainer removed comes back only
+    if a later release names it again."""
+    me, version = m["id"], m["version"]
+    mine = m.get("incompatible_with") or {}
+    notes, owners = [], []
+    for other, decl in sorted(mine.items()):
+        below = decl.get("below")
+        entry = _find_pair(incs, me, other)
+        if entry is None:
+            incs.append({"mods": dict(sorted({me: {}, other: {"below": below} if below else {}}.items())),
+                         "note": decl["note"]})
+            notes.append(f"Adds {me} and {other} as incompatible"
+                         + (f" (until {other} {below})" if below else "") + f": {decl['note']}")
+            if other.split(".")[0].casefold() != me.split(".")[0].casefold():
+                owners.append((other.split(".")[0], other))
+            continue
+        theirs, ours = _side(entry, other), _side(entry, me)
+        changed = []
+        if entry.get("note") != decl["note"]:
+            entry["note"] = decl["note"]
+            changed.append(f"note: {decl['note']}")
+        if below and theirs is not None and theirs.get("below") != below:
+            theirs["below"] = below
+            changed.append(f"{other} works with it from {below}")
+        if ours is not None and "below" in ours:
+            del ours["below"]
+            changed.append(f"{me} {version} lists it again, so no {me} version counts as fixed")
+        if changed:
+            notes.append(f"Updates {me} and {other}: " + "; ".join(changed))
+
+    published = known.get(me) or {}
+    if published and all(_vkey(version) > _vkey(v) for v in published):
+        was = published[max(published, key=_vkey)].get("incompatible_with")
+        named = {k.casefold() for k in mine}
+        for other in sorted(was if isinstance(was, dict) else {}):
+            entry = None if other.casefold() in named else _find_pair(incs, me, other)
+            ours = _side(entry, me) if entry else None
+            if ours is not None and "below" not in ours:
+                ours["below"] = version
+                notes.append(f"{me} {version} no longer lists {other}, so the two count as working "
+                             f"together from {me} {version}. If that's a mistake, the next release "
+                             f"should list it again.")
+    return notes, owners
 
 
 def replacement_errors(m, reps):
@@ -1099,15 +1336,22 @@ def _rules_confirmed(m, known):
             f"Scenes: {', '.join(scenes) if scenes else 'all'}"]
 
 
-REPORT_CHECKS = ("replacements.json", "Manifest rules", "Dependencies and libraries",
-                 "Files match their hashes", "VirusTotal scan", "Icons")
+REPORT_CHECKS = ("Repository lists", "Manifest rules", "Dependencies and libraries",
+                 "Incompatibilities", "Files match their hashes", "VirusTotal scan", "Icons")
+_LIST_FILES = (REPLACEMENTS_FILE, INCOMPATIBILITIES_FILE, WITHDRAWN_FILE)
 
 
 def cmd_validate(args):
     """--report FILE also writes each check's outcome as JSON: {check: {"status": "pass" | "fail" |
     "skipped", "title", "errors", "notes", "ok": what it confirmed}}, for the workflow to show as
-    separate checks."""
+    separate checks, plus "review": the notes worth a maintainer's look, and "mentions":
+    [{"login", "mod", "by"}], the owners of other mods a submission newly marks
+    incompatible, for the workflow to tell."""
     report = {c: {"status": "skipped", "title": "", "errors": [], "notes": [], "ok": []} for c in REPORT_CHECKS}
+    report["review"], report["mentions"] = [], []
+
+    def review(notes, who=""):
+        report["review"].extend(f"{who}{n}" for n in notes)
 
     def record(check, errs, notes=(), who="", ok=(), title=""):
         r = report[check]
@@ -1120,15 +1364,23 @@ def cmd_validate(args):
                 print(f"  ok    {who}{o}")
             r["title"] = r["title"] or title
 
+    def mention(login, mod, by):
+        if all(x["login"].casefold() != login.casefold() for x in report["mentions"]):
+            report["mentions"].append({"login": login, "mod": mod, "by": by})
+
     try:
-        return _validate(args, record)
+        return _validate(args, record, review, mention)
     finally:
         if getattr(args, "report", None):
             with open(args.report, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=1)
 
 
-def _validate(args, record):
+# Notes that only say a step went as expected, kept out of the reviewer's list.
+_ROUTINE_NOTES = ("detected a zip bundle", "VirusTotal clean", "already scanned; not scanned again")
+
+
+def _validate(args, record, review, mention):
     root = repo_root(args.repo)
     files = list(_submission_files(args.paths or [os.path.join(root, "submissions")]))
     known = _known_manifests(root)
@@ -1140,20 +1392,30 @@ def _validate(args, record):
         except Exception:
             pass
     rep_failed = False
-    if os.path.isfile(os.path.join(root, REPLACEMENTS_FILE)):
-        print(f"== {REPLACEMENTS_FILE} ==")
-        # A replacement may name a mod submitted in the same PR.
+    if any(os.path.isfile(os.path.join(root, name)) for name in _LIST_FILES):
+        print("== " + ", ".join(_LIST_FILES) + " ==")
+        # An entry may name a mod submitted in the same PR.
         both = {i: {**known.get(i, {}), **submitted.get(i, {})} for i in set(known) | set(submitted)}
-        all_reps = load_replacements(root)
-        errs = validate_replacements(all_reps, both)
-        record("replacements.json", errs,
-               ok=[f"{old} is replaced by {r['by']}, which is published or submitted" for old, r in sorted(all_reps.items())]
-               or ["No replacements listed"],
-               title=f"{len(all_reps)} replacement{'' if len(all_reps) == 1 else 's'}, all valid")
+        try:
+            all_reps, all_incs, all_wd = (load_replacements(root), load_incompatibilities(root),
+                                          load_withdrawn(root))
+            errs = (validate_replacements(all_reps, both) + validate_incompatibilities(all_incs, both, all_reps)
+                    + validate_withdrawn(all_wd, both))
+        except ValidationError as e:
+            all_reps, all_incs, all_wd, errs = {}, [], {}, [str(e)]
+        ok = [] if errs else (  # the entries' shapes are only safe to read once valid
+            [f"{old} is replaced by {r['by']}" for old, r in sorted(all_reps.items())]
+            + [f"{' and '.join(sorted(e['mods']))} are incompatible: {e['note']}" for e in all_incs]
+            + [f"{mod_id} {v} is withdrawn: {why}" for mod_id, vs in sorted(all_wd.items())
+               for v, why in sorted(vs.items(), key=lambda kv: _vkey(kv[0]))]
+            or ["Nothing listed"])
+        gone = sum(len(v) for v in all_wd.values() if isinstance(v, dict))
+        record("Repository lists", errs, ok=ok,
+               title=f"{len(all_reps)} replaced, {len(all_incs)} incompatible, {gone} withdrawn, all valid")
         for e in errs:
             print(f"  FAIL  {e}")
         if not errs:
-            print("  OK    every replacement points at a published or submitted mod")
+            print("  OK    every entry names published or submitted mods")
         rep_failed = bool(errs)
 
     if not files:
@@ -1162,6 +1424,12 @@ def _validate(args, record):
 
     api_key = os.environ.get("VIRUSTOTAL_API_KEY", "").strip() or None
     reps = load_replacements(root)
+    try:
+        incs, wd = load_incompatibilities(root), load_withdrawn(root)
+    except ValidationError:
+        incs, wd = [], {}       # reported above
+    live = without_withdrawn(known, wd)
+    preview = {i: dict(v) for i, v in known.items()}    # as ingest will see it, submission by submission
     sub_root = os.path.join(os.path.abspath(root), "submissions")
     all_ids = set(known) | set(reps) | set(submitted)
     vt_seen = {}
@@ -1192,17 +1460,31 @@ def _validate(args, record):
         record("Manifest rules", errs, who=who, ok=errs or _rules_confirmed(m, known),
                title=f"{m.get('id')} {m.get('version')} follows the manifest rules")
         if not errs:
-            errs, warns = validate_dependency_targets(m, known)
-            lib_errs, lib_warns = library_problems(m, known)
+            errs, warns = validate_dependency_targets(m, live, withdrawn_too=known)
+            lib_errs, lib_warns = library_problems(m, live)
             errs += lib_errs
             warns += lib_warns
             deps = m["dependencies"]
             libs = {lib["filename"]: lib["sha256"] for a in m["artifacts"] for lib in a["library_dependencies"]}
+            review(warns, who)
             record("Dependencies and libraries", errs, warns, who,
                    ok=[f"Needs {d} {v} or later{'' if d in known else ', from another source'}" for d, v in sorted(deps.items())]
                    + [f"Library {f}, sha256 {sha[:12]}..." for f, sha in sorted(libs.items())]
                    or ["No dependencies or libraries"],
                    title=f"{len(deps)} dependenc{'y' if len(deps) == 1 else 'ies'}, {len(libs)} librar{'y' if len(libs) == 1 else 'ies'}")
+        if not errs:
+            errs = incompatibility_errors(m, known, reps, submitted)
+            inc_notes, owners = declare_incompatibilities(m, preview, incs) if not errs else ([], [])
+            preview.setdefault(m["id"], {})[m["version"]] = m
+            named = sorted(m.get("incompatible_with") or {})
+            if named or inc_notes or errs:
+                record("Incompatibilities", errs, inc_notes, who,
+                       ok=[f"Doesn't work with {o}" for o in named] or ["Lists no incompatibilities"],
+                       title=f"Doesn't work with {len(named)} mod{'' if len(named) == 1 else 's'}")
+            warns += inc_notes
+            review(inc_notes, who)
+            for login, other in owners if not errs else []:
+                mention(login, other, m["id"])
         if not errs:
             file_errs, file_warns, vt_errs, vt_warns, verified = [], [], [], [], []
             for i, art in enumerate(m["artifacts"]):
@@ -1233,6 +1515,7 @@ def _validate(args, record):
                        title=f"{len(icons)} icon{'' if len(icons) == 1 else 's'}, each the size it says")
             errs = file_errs + vt_errs + icon_errs
             warns += file_warns + vt_warns
+            review([n for n in file_warns + vt_warns if not any(r in n for r in _ROUTINE_NOTES)], who)
 
         for w in warns:
             print(f"  note  {w}")
@@ -1316,14 +1599,21 @@ def _ingest_submissions(root):
     """Move each valid submission into manifests/, with package sniffed from
     its file after re-checking every hash, since a release asset can be
     replaced after review. An identical copy of a published one is only
-    pruned. Returns the moved paths."""
+    pruned. Adds what each new manifest declares to incompatibilities.json. Returns
+    the moved paths."""
     moved = []
+    known, incs = _known_manifests(root), load_incompatibilities(root)
+    before = json.dumps(incs)
+    subs = []
     for path in _submission_files([os.path.join(root, "submissions")]):
         rel = os.path.relpath(path, root)
         m = _load_json(path)
         errs = validate_structure(m)
         if errs:
             raise ValidationError(f"{rel} is not structurally valid:\n  - " + "\n  - ".join(errs))
+        subs.append((path, rel, m))
+    # Version order, so a release declares against the one before it.
+    for path, rel, m in sorted(subs, key=lambda s: (s[2]["id"], _vkey(s[2]["version"]))):
         author, repo = parse_id(m["id"])
         dest = os.path.join(root, "manifests", author, repo, f'{m["version"]}.json')
         for i, art in enumerate(m["artifacts"]):
@@ -1342,7 +1632,13 @@ def _ingest_submissions(root):
         else:
             _write_json(dest, out)
             print(f"ingested {rel} -> {os.path.relpath(dest, root)}")
+            for note in declare_incompatibilities(out, known, incs)[0]:
+                print(f"note  {note}")
+            known.setdefault(m["id"], {})[m["version"]] = out
         moved.append(path)
+    if json.dumps(incs) != before:
+        _write_json(os.path.join(root, INCOMPATIBILITIES_FILE), incs)
+        print(f"updated {INCOMPATIBILITIES_FILE}")
     return moved
 
 
@@ -1351,9 +1647,11 @@ def cmd_build(args):
     moved = _ingest_submissions(root) if args.ingest else []
     mods = _collect_manifests(root)
     reps = load_replacements(root)
-    rep_errs = validate_replacements(reps, mods)
+    incs, wd = load_incompatibilities(root), load_withdrawn(root)
+    rep_errs = (validate_replacements(reps, mods) + validate_incompatibilities(incs, mods, reps)
+                + validate_withdrawn(wd, mods))
     if rep_errs:
-        raise ValidationError(f"{REPLACEMENTS_FILE} is invalid:\n  - " + "\n  - ".join(rep_errs))
+        raise ValidationError("the repository lists are invalid:\n  - " + "\n  - ".join(rep_errs))
 
     # Checked repo-wide: a new release can break an old dependent.
     target_errs = []
@@ -1368,14 +1666,23 @@ def cmd_build(args):
                               + "\n  - ".join(target_errs))
 
     # A replaced mod keeps its manifests and pointers, so a server still on it
-    # can be joined, but leaves the listing.
+    # can be joined, but leaves the listing. A withdrawn version keeps its
+    # manifest but leaves the pointers and the listing; a mod with every version
+    # withdrawn leaves the listing.
     repo_index = {"index_version": SUPPORTED_INDEX_MAJOR, "mods": {}}
     if reps:
         repo_index["replaced"] = {
             old_id: {k: reps[old_id][k] for k in _REPLACEMENT_FIELDS if k in reps[old_id]}
             for old_id in sorted(reps)}
+    if incs:
+        repo_index["incompatible"] = [{"mods": dict(sorted(e["mods"].items())), "note": e["note"]}
+                                      for e in incs]
+    if wd:
+        repo_index["withdrawn"] = {mod_id: dict(sorted(wd[mod_id].items(), key=lambda kv: _vkey(kv[0])))
+                                   for mod_id in sorted(wd)}
+    live = without_withdrawn(mods, wd)
     for mod_id in sorted(mods):
-        versions = mods[mod_id]
+        versions = live.get(mod_id, {})
         author, repo = parse_id(mod_id)
         mod_dir = os.path.join(root, "manifests", author, repo)
         ordered_versions = sorted(versions, key=_vkey)
@@ -1383,13 +1690,21 @@ def cmd_build(args):
         for v in ordered_versions:
             by_major.setdefault(v.split(".")[0], []).append(v)
 
-        _write_json(os.path.join(mod_dir, "latest.json"),
-                    ordered_manifest(versions[ordered_versions[-1]]))
+        pointers = {}
+        if ordered_versions:
+            pointers["latest.json"] = versions[ordered_versions[-1]]
         for major, vs in by_major.items():
-            _write_json(os.path.join(mod_dir, f"latest.{major}.json"),
-                        ordered_manifest(versions[vs[-1]]))
+            pointers[f"latest.{major}.json"] = versions[vs[-1]]
+        for name, m in pointers.items():
+            _write_json(os.path.join(mod_dir, name), ordered_manifest(m))
+        for name in os.listdir(mod_dir):
+            if name.startswith("latest") and name.endswith(".json") and name not in pointers:
+                os.remove(os.path.join(mod_dir, name))      # its versions are all withdrawn
 
         majors = sorted(by_major, key=int)
+        if not majors:
+            print(f"kept {mod_id} unlisted: every version is withdrawn")
+            continue
         if mod_id in reps:
             print(f"kept {mod_id} unlisted: replaced by {reps[mod_id]['by']}")
             continue
@@ -1400,7 +1715,8 @@ def cmd_build(args):
 
     _write_json(os.path.join(root, "repository.json"), repo_index)
     print(f"\nwrote repository.json ({len(repo_index['mods'])} mod(s), "
-          f"{len(reps)} replaced)")
+          f"{len(reps)} replaced, {len(incs)} incompatible pair(s), "
+          f"{sum(len(v) for v in wd.values())} withdrawn version(s))")
 
     if args.prune:
         sub_root = os.path.abspath(os.path.join(root, "submissions"))
@@ -1492,7 +1808,7 @@ def cmd_site(args):
     if SITE_MARKER not in template:
         raise ValidationError(f"{template_path} has no {SITE_MARKER} to inject into")
 
-    mods = _collect_manifests(root)
+    mods = without_withdrawn(_collect_manifests(root), load_withdrawn(root))
     reps = load_replacements(root)
     rows = []
     for mod_id in sorted(set(mods) - set(reps)):
@@ -1500,6 +1816,7 @@ def cmd_site(args):
         m = mods[mod_id][latest]
         rows.append({"id": mod_id, **_display(m), "targets": manifest_targets(m),
                      "parity_required": parity_required(m), "latest": latest,
+                     "changelog": m.get("changelog", ""),
                      "dependencies": m.get("dependencies") or {},
                      "icons": m.get("icons") or [], "screenshots": _screenshots_for(m)})
     # The index owner's own mods (ModdingTavern's in ModdingTavern/TavernMods) come first and are marked.

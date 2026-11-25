@@ -178,6 +178,9 @@ export function Builder() {
               <datalist id={ids.mods}>{options(Object.keys(indexMods || {}))}</datalist>
               <Field label="Description" value={state.description} placeholder="One short line describing what the mod does."
                 onChange={(v) => edit((s) => { s.description = v })} />
+              <Field label="What's new in this version (optional)" value={state.changelog}
+                placeholder="Fixed dye vats. The launcher shows this when it offers the update."
+                onChange={(v) => edit((s) => { s.changelog = v })} />
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={loadPublished}>Load published manifest</Button>
                 <Button type="button" variant="outline" onClick={() => loadFile.current?.click()}>Load a manifest file</Button>
@@ -333,6 +336,25 @@ export function Builder() {
                 )
               })}
               <AddButton onClick={() => edit((s) => { s.dependencies.push({ id: "", version: "" }) })}>Add dependency</AddButton>
+            </Section>
+
+            <Section title="Doesn't work with" hint="Optional: mods in this repository that break alongside this one. The launcher warns anyone about to run them together, and the other mod's owner is told on your pull request. To say it's fixed, leave it out of your next release.">
+              {state.incompatible.map((x, i) => {
+                const versionsId = `${ids.mods}-inc-${i}`
+                return (
+                  <div key={i} className="flex flex-wrap items-end gap-2">
+                    <Field label="Mod id" className="flex-[2_1_14rem]" value={x.id} list={ids.mods} placeholder="SomeDev.DyeKit"
+                      onChange={(v) => edit((s) => { s.incompatible[i].id = v.trim() })} />
+                    <Field label="Why" className="flex-[3_1_18rem]" value={x.note} placeholder="Both patch dye vats."
+                      onChange={(v) => edit((s) => { s.incompatible[i].note = v })} />
+                    <Field label="Works from (optional)" className="flex-[1_1_9rem]" value={x.below} list={versionsId} placeholder="2.0.0"
+                      onChange={(v) => edit((s) => { s.incompatible[i].below = v.trim() })} />
+                    <datalist id={versionsId}>{publishedOf(indexMods, x.id).map((v) => <option key={v} value={v} />)}</datalist>
+                    <RemoveButton what={`incompatibility ${i + 1}`} onClick={() => edit((s) => { s.incompatible.splice(i, 1) })} />
+                  </div>
+                )
+              })}
+              <AddButton onClick={() => edit((s) => { s.incompatible.push({ id: "", note: "", below: "" }) })}>Add a mod it doesn't work with</AddButton>
             </Section>
 
             <Section title="Icons" hint="Optional square PNGs, shown in the launcher and on the mod page. Give all three sizes if you can. Host them like screenshots, as a release asset of your repo or a raw.githubusercontent.com link pinned to a commit.">

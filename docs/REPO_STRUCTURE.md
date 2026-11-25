@@ -40,7 +40,8 @@ A target is the build a process runs, not a game scene.
         "parity_required": true,
         "targets": ["client_windows", "server"],
         "scenes": ["normal", "quest"],   // only when set
-        "versions": ["1.0.0", "1.2.0"]   // every release in this major
+        "changelog": "Fixed dye vats.",  // only when set
+        "versions": ["1.0.0", "1.2.0"]   // every release in this major that isn't withdrawn
       }
     }
   },
@@ -49,14 +50,27 @@ A target is the build a process runs, not a game scene.
       "by": "ExampleDev.ExampleMod",
       "note": "Moved to ExampleDev."
     }
+  },
+  "incompatible": [                      // optional; see Incompatible mods
+    {
+      "mods": {
+        "ExampleDev.ExampleMod": {},
+        "SomeDev.DyeKit": { "below": "2.0.0" }
+      },
+      "note": "Both patch dye vats."
+    }
+  ],
+  "withdrawn": {                         // optional; see Withdrawn versions
+    "ExampleDev.ExampleMod": { "1.1.0": "Corrupts saves." }
   }
 }
 ```
 
 - A reader skips the whole file unless `index_version` is `2`. It is versioned separately from `manifest_version`.
 - Every field but `versions` comes from the highest release in that major, in the key order shown. `targets` is the sorted union of that release's artifact targets. `icons` is sorted by size.
-- The default install is `max(versions)`.
+- The default install is `max(versions)`. A major whose versions are all withdrawn has no entry, and a mod with none left has none at all.
 - A reader ignores a `replaced` entry that isn't an object with a string `by` naming a different id. `note` is optional text.
+- A reader ignores an `incompatible` entry whose `mods` isn't an object of exactly two different ids, each mapping to an object, or whose `note` isn't a string, and a `below` that isn't a valid version. It ignores a `withdrawn` entry that isn't an object of version to string.
 
 ## Manifest
 
@@ -70,6 +84,7 @@ The `<version>.json` and `latest*.json` files.
   "version": "1.2.0",
   "author": "ExampleDev",
   "description": "Does something useful.",
+  "changelog": "Fixed dye vats.",
   "icons": [
     { "size": 128, "url": "https://raw.githubusercontent.com/ExampleDev/ExampleMod/<commit sha>/icon-128.png" },
     { "size": 256, "url": "https://raw.githubusercontent.com/ExampleDev/ExampleMod/<commit sha>/icon-256.png" }
@@ -77,6 +92,9 @@ The `<version>.json` and `latest*.json` files.
   "parity_required": true,
   "scenes": ["normal", "quest"],
   "dependencies": { "SomeDev.UtilKit": "1.2.0" },
+  "incompatible_with": {
+    "SomeDev.DyeKit": { "note": "Both patch dye vats.", "below": "2.0.0" }
+  },
   "artifacts": [
     {
       "targets": ["client_windows", "server"],
@@ -103,7 +121,7 @@ The `<version>.json` and `latest*.json` files.
 }
 ```
 
-Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `description`, `icons`, `screenshots`, `parity_required`, `scenes`, `dependencies`, `artifacts`. Artifact: `targets`, `download_url`, `sha256`, `package`, `library_dependencies`. Library: `name`, `download_url`, `sha256`, `filename`. Icon: `size`, `url`.
+Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `description`, `changelog`, `icons`, `screenshots`, `parity_required`, `scenes`, `dependencies`, `incompatible_with`, `artifacts`. Artifact: `targets`, `download_url`, `sha256`, `package`, `library_dependencies`. Library: `name`, `download_url`, `sha256`, `filename`. Icon: `size`, `url`.
 
 | Field | Rule |
 | --- | --- |
@@ -113,11 +131,13 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | `version` | `MAJOR.MINOR.PATCH`: three segments of ASCII digits, each at most 2147483647. No suffix. |
 | `author` | Defaults to the text before the first dot in `id`. |
 | `description` | Free text. |
+| `changelog` | Optional text, at most 2000 characters: what changed in this version. Launchers show it when offering the update. |
 | `icons` | Optional non-empty list of `{"size", "url"}`, one per size, sizes out of `128`, `256` and `512`. Each `url` is a square PNG of that size, at most 1 MB, under the same rules as `screenshots`. Launchers and pages pick the size that suits; the index carries them for browsing. |
 | `screenshots` | Optional list of image URLs for this repo's page. Installers ignore it. |
 | `parity_required` | Required boolean: whether a player needs this mod, at the server's exact version, to join a server running it. It compares versions, not files, so separate client and server artifacts don't affect it. Readers refuse a missing or non-boolean value. See [Joining a server](#joining-a-server). |
 | `scenes` | Optional non-empty list of distinct scenes the mod works in, out of `normal`, `quest`, `tutorial`. Absent or `null` means all. |
 | `dependencies` | Always present. `{}` or `{"<mod id>": "<minimum version>"}`, versions as strings. |
+| `incompatible_with` | Optional. `{"<mod id>": {"note": "<why, at most 300 characters>", "below": "<first version of that mod that works>"}}`, `below` optional. Each id must be in this repository, under its current id, and not one the mod depends on. Read by this repo's tooling, not by installers: they read `incompatible` in `repository.json`. See [Incompatible mods](#incompatible-mods). |
 | `artifacts` | Required, non-empty. One entry per build. |
 | `artifacts[].targets` | Non-empty list. A target may appear in only one artifact; a duplicate refuses the manifest. A target no artifact lists is unsupported. |
 | `artifacts[].download_url` | `https://` URL of one `.dll` or one `.zip`. |
@@ -125,7 +145,7 @@ Compiled key order: `manifest_version`, `id`, `name`, `version`, `author`, `desc
 | `artifacts[].package` | `"dll"` or `"zip"`, set by the tooling from the file's bytes (`PK` = zip), never by the author. Matched exactly: any other value, or none, and the artifact is ignored. |
 | `artifacts[].library_dependencies` | Always present. `[]` or a list of libraries (fields above). |
 
-There is no mod-level `filename`. `name`, `author`, `description` and the library fields are strings; readers refuse a manifest with another type there rather than convert it.
+There is no mod-level `filename`. `name`, `author`, `description` and the library fields are strings; readers refuse a manifest with another type there rather than convert it. This repo refuses a submission with a field not listed here, at any level, so a misspelt optional field isn't silently dropped.
 
 **Unknown names.** Readers ignore unknown target names (and an artifact left with no known target) and keep unknown scene names, so later additions don't break old builds.
 
@@ -261,6 +281,29 @@ A source can retire a mod in favour of another, for example when it moves to a n
 - **Pins and modlists.** An entry for a replaced id means the replacement at its latest; an exact version is dropped. Importing a modlist disables the old mod, as it does anything else the list leaves out.
 - **Joining.** A server running the old mod is joined as before. A pinned replacement is left out of that join, so the two don't both load.
 - **Headless servers.** TavernLib's reconcile reads a modlist entry for a replaced id as the replacement, and disables the old mod as no longer listed.
+
+## Incompatible mods
+
+A pair of mods that don't work together, listed under `incompatible` in `repository.json`. Each side's `below`, when set, is the first version of that mod that works with the other; the pair applies while both installed versions are below their `below`. The pair is symmetric: either mod's author can declare it, and nothing about it depends on which.
+
+- **Where pairs come from.** This repo keeps them in `incompatibilities.json`, the same shape as `incompatible`. Maintainers edit it. When a submission is merged, its `incompatible_with` adds a pair for each mod it names (or updates its note and the other side's `below`), and if it is its mod's new highest version, a pair its previous highest version named and it doesn't gets this mod's `below` set to its version: dropping the entry is how an author says the clash is fixed. Naming it again clears that `below`. A pair a maintainer removed comes back only if a later release names it again.
+- **Whose word counts.** Pairs are read from every configured source and used together.
+- **Launcher, installs.** An install, or enabling a mod, that would leave a pair enabled for the same target asks first, naming the other mod and the note; going ahead disables the other mod. A pair inside one install set (the mod and its dependencies) refuses the install.
+- **Launcher, installed mods.** The Mod Manager marks both mods of an enabled pair, with the note, and offers to disable the other.
+- **Joining.** The server's mods are its own choice. A mod the player chose (pinned or recommended) that clashes with one the server runs is left out of that join. Two of the server's own mods that clash only get a warning.
+- **Modlists.** Importing a modlist with a pair in it warns, and imports.
+- **Headless servers.** TavernLib's reconcile warns about an enabled pair, and changes nothing.
+
+## Withdrawn versions
+
+A release pulled after publishing, because it is harmful (malware, corrupted saves) or badly broken, listed under `withdrawn` in `repository.json` with a reason. Its manifest stays, so a record or a server still on it can be named, but it leaves `versions` and the `latest*.json` pointers, so nothing resolves to it.
+
+- **Where they come from.** This repo keeps them in `withdrawn.json`, `{id: {version: reason}}`. Maintainers only; to ask for one, open an issue.
+- **Whose word counts.** As for replaced mods: an installed record's own `source_repo`, else the default source, else the first configured source listing it.
+- **Launcher, installed mods.** The Mod Manager marks a withdrawn version with its reason, and offers the highest version that isn't withdrawn (in its major, else any), or to disable it if there's none. Nothing changes on its own.
+- **Pins and modlists.** An entry for an exact withdrawn version means the mod at its latest; the launcher says so.
+- **Joining.** A join to a server running a withdrawn version of a mod the player would need is refused, with the reason, so no player installs it. The host needs to update it.
+- **Headless servers.** TavernLib's reconcile reads a modlist entry for an exact withdrawn version as that major's latest, else the mod's latest, and logs why. An entry for the mod at its latest never resolves to one.
 
 ## Displaced folders
 

@@ -1,7 +1,7 @@
 name: Publish index
 
 # After a merge to main: ingest submissions/ into manifests/, rebuild the
-# latest*.json pointers and repository.json (with replacements.json), and
+# latest*.json pointers and repository.json (with the repository lists), and
 # commit the result.
 #
 # main is protected, so the push uses a token from a GitHub App on the ruleset
@@ -16,6 +16,8 @@ on:
       - "submissions/**"
       - "manifests/**"
       - "replacements.json"
+      - "incompatibilities.json"
+      - "withdrawn.json"
       - "tools/**"
   workflow_dispatch:
 

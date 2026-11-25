@@ -8,7 +8,7 @@
 4. Open a pull request that adds only `submissions/<owner>.<repo>/<version>.json`. Only maintainers can add files here directly, so fork this repo first. The builder's **Add to your fork** button then opens the file in your fork, ready to commit to a new branch and propose as a pull request. The checks post their result as a comment and re-run on every push.
 5. A maintainer reviews and merges, and the index rebuilds itself.
 
-`parity_required`: keep `true` if players need your mod, at the server's exact version, to join a server running it, or if unsure. Set `scenes` only if your mod breaks in some scene.
+`parity_required`: keep `true` if players need your mod, at the server's exact version, to join a server running it, or if unsure. Set `scenes` only if your mod breaks in some scene. `changelog` is optional: a few lines on what changed, which the launcher shows when it offers the update.
 
 ## Updating
 
@@ -23,6 +23,9 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 - its version is already published, or is lower than the highest published version in its major. A fix to an older major is fine, but a new major can't start below the newest version;
 - its id, or a dependency's id, has been replaced (see below), or its id differs only in case from a published or replaced one;
 - its `id`, or a dependency's id, isn't a valid GitHub `owner.repo`, or it depends on itself;
+- it has a field that isn't in [REPO_STRUCTURE.md](REPO_STRUCTURE.md#manifest), at any level (usually a typo);
+- `incompatible_with` names a mod that isn't in this repository, has been replaced, is the mod itself or is one of its dependencies, or an entry has no `note`;
+- a dependency is only met by withdrawn versions;
 - an artifact's `download_url` isn't a tagged release asset of the id's own repo, as in step 1 (libraries may live on any `https://` host);
 - a `sha256` isn't lowercase or doesn't match the downloaded file, or an artifact is neither a DLL nor a zip;
 - a target or scene name is unknown, or `scenes` lists all three;
@@ -33,9 +36,37 @@ On top of the rules in [REPO_STRUCTURE.md](REPO_STRUCTURE.md), a submission fail
 
 The hashes are checked again when the submission is published, so a file changed after review stops the publish.
 
+The checks comment lists anything a reviewer should look at under **For the reviewer**: the notes above, and the incompatibilities a submission adds or changes.
+
 **Icons.** Optional. List up to three square PNGs, one per size (128, 256 and 512 px), each at most 1 MB and hosted like screenshots below. The launcher and the mod page each pick the size they need, so give all three if you can. The checks fail if an icon breaks these rules or isn't the size it says.
 
 **Screenshots.** The page shows the first four `screenshots` that are `https://` on `github.com` or `raw.githubusercontent.com` under your own `owner/repo`, immutable (a tagged release asset, or a raw URL pinned to a 40-character commit sha), and `.png`, `.jpg`, `.jpeg`, `.webp` or `.gif`. Others are skipped.
+
+## Incompatible mods
+
+If your mod doesn't work with another mod in this repository, say so in your manifest, and the launcher warns anyone about to run the two together:
+
+```json
+"incompatible_with": {
+  "SomeDev.DyeKit": { "note": "Both patch dye vats.", "below": "2.0.0" }
+}
+```
+
+`note` says why, in a sentence players will read. `below` is optional: the first version of the other mod that works with yours, if there is one. When the PR passes its checks, the other mod's owner is mentioned on it, so they can object or say a version of theirs already works.
+
+Once merged, the pair goes into [`incompatibilities.json`](../incompatibilities.json). To say you've fixed it, leave the entry out of your next release: the pair then only applies to your earlier versions. If the other mod fixes it, its owner can ask a maintainer to set its `below`. Maintainers can also add a pair themselves, for example when players report one, and fix or remove any entry; a fork PR can't change the file.
+
+## Withdrawing a version
+
+Maintainers only; to ask for one, open an issue. A release that is harmful or badly broken can be withdrawn by adding it to [`withdrawn.json`](../withdrawn.json) with the reason players will see:
+
+```json
+{
+  "ExampleDev.ExampleMod": { "1.1.0": "Corrupts saves. Update to 1.1.1." }
+}
+```
+
+It leaves the listing and the `latest` pointers, so nothing installs it, but its manifest stays. Launchers mark an installed copy and offer the update, refuse joins to a server still running it, and headless servers move to the latest version on their next start; see [REPO_STRUCTURE.md](REPO_STRUCTURE.md#withdrawn-versions). Withdrawing every version of a mod takes it out of the listing. A fork PR can't change the file.
 
 ## Replacing a mod
 
@@ -59,8 +90,8 @@ The old mod's manifests stay, so servers still running it can be joined, but it 
 | Command | Does | Runs in |
 | --- | --- | --- |
 | `fill-hashes [paths]` | Downloads every artifact and library and writes their `sha256`. | by hand |
-| `validate [paths] [--vt-max-malicious N] [--require-vt]` | The checks above, and `replacements.json`. Exits non-zero on failure. | `validate.yml`, on each PR that adds a submission or changes `replacements.json` |
-| `build [--ingest] [--prune]` | Compiles `manifests/` and `replacements.json` into the pointers and `repository.json`. `--ingest` first moves submissions into `manifests/`, re-checking their hashes and setting `package`; `--prune` deletes the moved files. | `publish.yml`, on merge to `main` |
+| `validate [paths] [--vt-max-malicious N] [--require-vt] [--report FILE]` | The checks above, and the repository lists (`replacements.json`, `incompatibilities.json`, `withdrawn.json`). Exits non-zero on failure. | `validate.yml`, on each PR that adds a submission or changes a repository list |
+| `build [--ingest] [--prune]` | Compiles `manifests/` and the repository lists into the pointers and `repository.json`. `--ingest` first moves submissions into `manifests/`, re-checking their hashes, setting `package` and adding the incompatibilities they declare; `--prune` deletes the moved files. | `publish.yml`, on merge to `main` |
 | `site [--template FILE] [--out DIR] [--owner NAME]` | Bakes the mod list into the built page (`web/dist/index.html` by default) and writes `site/index.html`, the owner's mods first. | `pages.yml`, after each build |
 
 `paths` defaults to `submissions/`.
