@@ -7,7 +7,8 @@ import type { Icon, Mod } from "@/lib/mods"
 export const SCHEMA = 1
 export const FILE_NAME = "modlist.json"
 
-// repository.json: id -> major -> what that major's latest says, and the replaced mods.
+// repository.json: id -> major -> what that major's latest says, the replaced mods, the pairs that don't work
+// together and the withdrawn versions.
 interface Major {
   name?: string
   author?: string
@@ -17,9 +18,27 @@ interface Major {
   targets?: string[]
   versions?: string[]
 }
+export interface Incompatible { mods: Record<string, { below?: string }>; note: string }
 export interface Repository {
   mods?: Record<string, Record<string, Major>>
   replaced?: Record<string, { by: string; note?: string }>
+  incompatible?: Incompatible[]
+  withdrawn?: Record<string, Record<string, string>>
+}
+
+const older = (v: string, below?: string) => {
+  if (!below) return true
+  const a = v.split(".").map(Number), b = below.split(".").map(Number)
+  return (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) < 0
+}
+// The pairs among these mods (id -> version) that don't work together, as the launcher reads them.
+export function clashes(versions: Map<string, string>, repo: Repository): string[] {
+  return (repo.incompatible || []).flatMap((e) => {
+    const ids = Object.keys(e?.mods || {})
+    if (ids.length !== 2 || typeof e.note !== "string") return []
+    const hit = ids.every((id) => versions.has(id) && older(versions.get(id)!, e.mods[id]?.below))
+    return hit ? [`${ids[0]} and ${ids[1]} don't work together: ${e.note}`] : []
+  })
 }
 
 // A mod with a server build, as the list shows it. versions: those with a server build, highest first.
@@ -71,6 +90,8 @@ export function readModlist(text: string, repo: Repository): { picks: Pick[]; no
     let id = (at < 0 ? entry : entry.slice(0, at)).trim(), version = at < 0 ? "" : entry.slice(at + 1).trim()
     const by = repo.replaced?.[id]?.by
     if (by) { notes.push(`${id} is replaced by ${by}, so that's listed instead, at its latest.`); id = by; version = "" }
+    const why = version && repo.withdrawn?.[id]?.[version]
+    if (why) { notes.push(`${id} ${version} has been withdrawn (${why}), so it's listed at its latest.`); version = "" }
     if (id) picks.set(id, { id, version })
   }
   return { picks: [...picks.values()], notes }
@@ -80,16 +101,21 @@ export function readModlist(text: string, repo: Repository): { picks: Pick[]; no
 export function problems(picks: Pick[], mods: ServerMod[], repo: Repository | null): string[] {
   if (!repo) return []
   const byId = new Map(mods.map((m) => [m.id, m]))
-  return picks.flatMap((p) => {
+  const chosen = new Map<string, string>()
+  const out = picks.flatMap((p) => {
     const m = byId.get(p.id)
     if (!m) {
       return repo.mods?.[p.id]
         ? [`${p.id} has no server build, so a server leaves it out.`]
         : [`${p.id} isn't in this index. A server only installs it if it also trusts a source that has it.`]
     }
+    const why = p.version && repo.withdrawn?.[p.id]?.[p.version]
+    if (why) return [`${m.name} ${p.version} has been withdrawn (${why}). A server installs its latest instead.`]
     if (p.version && !m.versions.includes(p.version)) return [`${m.name} ${p.version} isn't published with a server build.`]
+    chosen.set(p.id, p.version || m.versions[0])
     return []
   })
+  return [...out, ...clashes(chosen, repo)]
 }
 
 // The mods a server installs along with the picks: each one's dependencies, and theirs, from the published
