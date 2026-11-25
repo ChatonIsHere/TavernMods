@@ -22,8 +22,9 @@ import modindex as mi
 
 FIXTURES = os.path.join(HERE, "fixtures", "v2")
 CLEAN = {"malicious": 0, "suspicious": 0, "harmless": 1, "undetected": 60}
-MANIFEST_ORDER = ["manifest_version", "id", "name", "version", "author", "description",
-                  "icons", "screenshots", "parity_required", "scenes", "dependencies", "artifacts"]
+MANIFEST_ORDER = ["manifest_version", "id", "name", "version", "author", "description", "changelog",
+                  "icons", "screenshots", "parity_required", "scenes", "dependencies", "incompatible_with",
+                  "artifacts"]
 ARTIFACT_ORDER = ["targets", "download_url", "sha256", "package", "library_dependencies"]
 LIBRARY_ORDER = ["name", "download_url", "sha256", "filename"]
 
@@ -306,8 +307,9 @@ class Structure(unittest.TestCase):
 
 class CanonicalOrder(unittest.TestCase):
     def test_every_level_is_reordered(self):
-        out = mi.ordered_manifest(scrambled(manifest(scenes=["quest"], screenshots=[], artifacts=[
-            artifact(package="dll", library_dependencies=[library()])], icons=[{"url": "u", "size": 128}])))
+        out = mi.ordered_manifest(scrambled(manifest(scenes=["quest"], screenshots=[], changelog="c",
+            incompatible_with={}, artifacts=[artifact(package="dll", library_dependencies=[library()])],
+            icons=[{"url": "u", "size": 128}])))
         self.assertEqual(list(out), MANIFEST_ORDER)
         self.assertEqual(list(out["icons"][0]), ["size", "url"])
         self.assertEqual(list(out["artifacts"][0]), ARTIFACT_ORDER)
@@ -459,10 +461,12 @@ class Validate(unittest.TestCase):
                      dependencies={"Other.Kit": "1.2.0"}, icons=[icon(128)])
         rc, out, report = self.report(m)
         self.assertEqual(rc, 0, out)
-        self.assertEqual(list(report), list(mi.REPORT_CHECKS))
-        self.assertEqual({k: v["status"] for k, v in report.items()},
-                         {"replacements.json": "skipped", "Manifest rules": "pass", "Dependencies and libraries": "pass",
-                          "Files match their hashes": "pass", "VirusTotal scan": "pass", "Icons": "pass"})
+        self.assertEqual(list(report), list(mi.REPORT_CHECKS) + ["review", "mentions"])
+        self.assertEqual({k: report[k]["status"] for k in mi.REPORT_CHECKS},
+                         {"Repository lists": "skipped", "Manifest rules": "pass", "Dependencies and libraries": "pass",
+                          "Incompatibilities": "skipped", "Files match their hashes": "pass", "VirusTotal scan": "pass",
+                          "Icons": "pass"})
+        self.assertEqual(report["mentions"], [])
         self.assertEqual(report["Manifest rules"]["title"], "Owner.Repo 1.0.0 follows the manifest rules")
         self.assertIn("Version 1.0.0 is the first release of Owner.Repo", report["Manifest rules"]["ok"])
         self.assertEqual(report["Dependencies and libraries"]["title"], "1 dependency, 1 library")
@@ -488,7 +492,7 @@ class Validate(unittest.TestCase):
         rc, out, report = self.report(manifest(version="1.0"))
         self.assertEqual(report["Manifest rules"]["status"], "fail")
         self.assertEqual(report["Manifest rules"]["ok"], [])
-        self.assertEqual({k for k, v in report.items() if v["status"] == "skipped"},
+        self.assertEqual({k for k in mi.REPORT_CHECKS if report[k]["status"] == "skipped"},
                          set(mi.REPORT_CHECKS) - {"Manifest rules"})
 
     def split(self, server_zip):
@@ -1043,6 +1047,276 @@ class ReferenceFixtures(unittest.TestCase):
             reference = json.load(f)
         self.assertEqual(json.dumps(built, ensure_ascii=False),
                          json.dumps(reference, ensure_ascii=False))
+
+
+
+class ListedFields(unittest.TestCase):
+    """changelog, incompatible_with, and unknown fields."""
+
+    def errors(self, **over):
+        return mi.validate_structure(manifest(**over))
+
+    def test_unknown_fields_are_refused_at_every_level(self):
+        self.assertIn("'incompatable_with'", " ".join(self.errors(incompatable_with={})))
+        m = with_artifact(manifest(), url="x")
+        self.assertIn("artifacts[0] has an unknown field 'url'", " ".join(mi.validate_structure(m)))
+        m = manifest(artifacts=[artifact(library_dependencies=[library(version="1")])])
+        self.assertIn("unknown field 'version'", " ".join(mi.validate_structure(m)))
+        self.assertEqual(self.errors(), [])
+
+    def test_changelog(self):
+        self.assertEqual(self.errors(changelog="Fixed the dye vats."), [])
+        for bad in ("", "   ", 3, "x" * (mi.CHANGELOG_MAX + 1)):
+            self.assertIn("changelog", " ".join(self.errors(changelog=bad)), bad)
+
+    def test_incompatible_with(self):
+        self.assertEqual(self.errors(incompatible_with={}), [])
+        self.assertEqual(self.errors(incompatible_with={"Other.Kit": {"note": "Both patch vats", "below": "2.0.0"}}), [])
+        bad = {
+            "own id": ({"owner.repo": {"note": "x"}}, "own id"),
+            "bad id": ({"no-dot": {"note": "x"}}, "not a valid mod id"),
+            "no note": ({"Other.Kit": {}}, ".note must be text"),
+            "long note": ({"Other.Kit": {"note": "x" * (mi.NOTE_MAX + 1)}}, ".note must be text"),
+            "bad below": ({"Other.Kit": {"note": "x", "below": "2.0"}}, "MAJOR.MINOR.PATCH"),
+            "unknown key": ({"Other.Kit": {"note": "x", "since": "1.0.0"}}, "unknown field 'since'"),
+            "not an object": ([], "must be an object"),
+            "string entry": ({"Other.Kit": "x"}, 'with "note"'),
+        }
+        for name, (value, needle) in bad.items():
+            self.assertIn(needle, " ".join(self.errors(incompatible_with=value)), name)
+
+    def test_new_fields_keep_their_place(self):
+        out = mi.ordered_manifest(scrambled(manifest(changelog="c", incompatible_with={})))
+        keys = list(out)
+        self.assertEqual(keys.index("changelog"), keys.index("description") + 1)
+        self.assertEqual(keys.index("incompatible_with"), keys.index("dependencies") + 1)
+
+
+class Incompatibilities(unittest.TestCase):
+    """declare_incompatibilities and validate_incompatibilities on their own."""
+
+    A, B = "Owner.Repo", "Other.Kit"
+
+    def declare(self, m, known, incs):
+        return mi.declare_incompatibilities(m, known, incs)
+
+    def test_a_new_pair_with_the_other_side_bounded(self):
+        incs = []
+        m = manifest(incompatible_with={self.B: {"note": "Both patch vats", "below": "2.0.0"}})
+        notes, owners = self.declare(m, {}, incs)
+        self.assertEqual(incs, [{"mods": {self.B: {"below": "2.0.0"}, self.A: {}}, "note": "Both patch vats"}])
+        self.assertEqual(owners, [("Other", self.B)])
+        self.assertIn("until Other.Kit 2.0.0", notes[0])
+
+    def test_same_owner_is_not_mentioned(self):
+        _, owners = self.declare(manifest(incompatible_with={"owner.Tool": {"note": "x"}}), {}, [])
+        self.assertEqual(owners, [])
+
+    def test_dropping_it_in_a_later_release_marks_it_fixed(self):
+        v1 = manifest(incompatible_with={self.B: {"note": "x"}})
+        incs = []
+        self.declare(v1, {}, incs)
+        known = {self.A: {"1.0.0": v1}}
+        notes, owners = self.declare(manifest(version="1.1.0"), known, incs)
+        self.assertEqual(incs[0]["mods"][self.A], {"below": "1.1.0"})
+        self.assertIn("no longer lists Other.Kit", notes[0])
+        self.assertEqual(owners, [])
+        # Listing it again undoes that.
+        known[self.A]["1.1.0"] = manifest(version="1.1.0")
+        notes, owners = self.declare(manifest(version="1.2.0", incompatible_with={self.B: {"note": "x"}}), known, incs)
+        self.assertEqual(incs[0]["mods"][self.A], {})
+        self.assertIn("lists it again", notes[0])
+        self.assertEqual(owners, [])        # the pair isn't new
+
+    def test_a_fix_to_an_older_major_marks_nothing(self):
+        incs = []
+        v2 = manifest(version="2.0.0", incompatible_with={self.B: {"note": "x"}})
+        self.declare(v2, {}, incs)
+        self.declare(manifest(version="1.5.0"), {self.A: {"2.0.0": v2}}, incs)
+        self.assertEqual(incs[0]["mods"][self.A], {})
+
+    def test_a_removed_pair_stays_removed_when_dropped(self):
+        known = {self.A: {"1.0.0": manifest(incompatible_with={self.B: {"note": "x"}})}}
+        incs = []
+        notes, _ = self.declare(manifest(version="1.1.0"), known, incs)
+        self.assertEqual((incs, notes), ([], []))
+
+    def test_note_and_below_updates(self):
+        incs = [{"mods": {self.A: {}, self.B: {}}, "note": "old"}]
+        notes, _ = self.declare(manifest(incompatible_with={"other.kit": {"note": "new", "below": "3.1.0"}}), {}, incs)
+        self.assertEqual(incs, [{"mods": {self.A: {}, self.B: {"below": "3.1.0"}}, "note": "new"}])
+        self.assertIn("works with it from 3.1.0", notes[0])
+
+    def test_validate_the_list(self):
+        mods = {self.A: {"1.0.0": manifest()}, self.B: {"1.0.0": manifest(self.B)}}
+        good = [{"mods": {self.A: {}, self.B: {"below": "2.0.0"}}, "note": "x"}]
+        self.assertEqual(mi.validate_incompatibilities(good, mods, {}), [])
+        cases = {
+            "unpublished": ([{"mods": {self.A: {}, "Gone.Mod": {}}, "note": "x"}], {}, "isn't published"),
+            "replaced": (good, {self.B: {"by": self.A}}, "has been replaced"),
+            "one mod": ([{"mods": {self.A: {}}, "note": "x"}], {}, "two different mods"),
+            "same mod twice": ([{"mods": {self.A: {}, "owner.repo": {}}, "note": "x"}], {}, "two different mods"),
+            "no note": ([{"mods": {self.A: {}, self.B: {}}}], {}, "note must be text"),
+            "twice": (good + good, {}, "more than once"),
+            "bad below": ([{"mods": {self.A: {}, self.B: {"below": "x"}}, "note": "x"}], {}, "below"),
+            "unknown side key": ([{"mods": {self.A: {"from": "1.0.0"}, self.B: {}}, "note": "x"}], {}, "'from'"),
+            "not an object": (["x"], {}, "must be an object"),
+        }
+        for name, (incs, reps, needle) in cases.items():
+            self.assertIn(needle, " ".join(mi.validate_incompatibilities(incs, mods, reps)), name)
+
+    def test_validate_withdrawn(self):
+        mods = {self.A: {"1.0.0": manifest()}}
+        self.assertEqual(mi.validate_withdrawn({self.A: {"1.0.0": "Corrupts saves"}}, mods), [])
+        for wd, needle in (({"Gone.Mod": {"1.0.0": "x"}}, "no such mod"),
+                           ({self.A: {"9.9.9": "x"}}, "no such version"),
+                           ({self.A: {"1.0.0": ""}}, "reason must be text"),
+                           ({self.A: {}}, "version -> reason")):
+            self.assertIn(needle, " ".join(mi.validate_withdrawn(wd, mods)), wd)
+
+
+class ValidateLists(unittest.TestCase):
+    """The PR check with incompatibilities and withdrawn versions."""
+
+    setUp, serve, validate, report = Validate.setUp, Validate.serve, Validate.validate, Validate.report
+
+    def publish(self, m):
+        author, repo = m["id"].split(".", 1)
+        mi._write_json(os.path.join(self.root, "manifests", author, repo, f'{m["version"]}.json'), m)
+
+    def write(self, name, data):
+        mi._write_json(os.path.join(self.root, name), data)
+
+    def submission(self, **over):
+        return manifest(artifacts=[self.serve(artifact(), b"MZ dll")], **over)
+
+    def test_a_new_incompatibility_is_flagged_and_its_owner_mentioned(self):
+        self.publish(manifest("Other.Kit"))
+        rc, out, report = self.report(self.submission(incompatible_with={"Other.Kit": {"note": "Both patch vats"}}))
+        self.assertEqual(rc, 0, out)
+        part = report["Incompatibilities"]
+        self.assertEqual((part["status"], part["ok"]), ("pass", ["Doesn't work with Other.Kit"]))
+        self.assertIn("Adds Owner.Repo and Other.Kit as incompatible: Both patch vats", part["notes"])
+        self.assertIn("Adds Owner.Repo and Other.Kit as incompatible: Both patch vats", report["review"])
+        self.assertEqual(report["mentions"], [{"login": "Other", "mod": "Other.Kit", "by": "Owner.Repo"}])
+        self.assertFalse(any("VirusTotal clean" in n for n in report["review"]))
+
+    def test_an_already_listed_pair_mentions_nobody(self):
+        self.publish(manifest("Other.Kit"))
+        self.write(mi.INCOMPATIBILITIES_FILE, [{"mods": {"Other.Kit": {}, "Owner.Repo": {}}, "note": "Both patch vats"}])
+        rc, out, report = self.report(self.submission(incompatible_with={"Other.Kit": {"note": "Both patch vats"}}))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((report["mentions"], report["Incompatibilities"]["notes"]), ([], []))
+        self.assertEqual(report["Repository lists"]["status"], "pass")
+
+    def test_what_it_names_must_be_listed_here_and_not_a_dependency(self):
+        self.publish(manifest("Other.Kit"))
+        self.publish(manifest("Old.Kit"))
+        self.write(mi.REPLACEMENTS_FILE, {"Old.Kit": {"by": "Other.Kit"}})
+        for named, deps, needle in (("Nobody.Here", {}, "isn't in this repository"),
+                                    ("other.kit", {}, "isn't in this repository"),
+                                    ("Old.Kit", {}, "has been replaced by Other.Kit"),
+                                    ("Other.Kit", {"Other.Kit": "1.0.0"}, "depends on")):
+            rc, out, report = self.report(self.submission(dependencies=deps, incompatible_with={named: {"note": "x"}}))
+            self.assertEqual(rc, 1, named)
+            self.assertEqual(report["Incompatibilities"]["status"], "fail", named)
+            self.assertIn(needle, " ".join(report["Incompatibilities"]["errors"]), named)
+            self.assertEqual(report["mentions"], [], named)
+            self.assertEqual(report["Files match their hashes"]["status"], "skipped", named)
+
+    def test_bad_lists_fail_their_part(self):
+        self.write(mi.INCOMPATIBILITIES_FILE, [{"mods": {"Owner.Repo": {}, "Gone.Mod": {}}, "note": "x"}])
+        self.write(mi.WITHDRAWN_FILE, {"Gone.Mod": {"1.0.0": "x"}})
+        rc, out, report = self.report(self.submission())
+        self.assertEqual(rc, 1)
+        errors = " ".join(report["Repository lists"]["errors"])
+        self.assertIn("Gone.Mod isn't published here", errors)
+        self.assertIn("withdrawn.json: Gone.Mod: no such mod", errors)
+
+    def test_a_dependency_only_withdrawn_versions_meet_fails(self):
+        self.publish(manifest("Other.Kit", version="1.2.0"))
+        self.write(mi.WITHDRAWN_FILE, {"Other.Kit": {"1.2.0": "Corrupts saves"}})
+        rc, out, report = self.report(self.submission(dependencies={"Other.Kit": "1.0.0"}))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("every version that meets it has been withdrawn",
+                      " ".join(report["Dependencies and libraries"]["errors"]))
+        self.assertIn("Other.Kit 1.2.0 is withdrawn: Corrupts saves", report["Repository lists"]["ok"])
+
+
+class BuildLists(unittest.TestCase):
+    """Ingest and build with incompatibilities and withdrawn versions."""
+
+    setUp, submit, place, build, read = Build.setUp, Build.submit, Build.place, Build.build, Build.read
+
+    def test_ingest_adds_and_later_fixes_a_pair(self):
+        self.place(manifest("Other.Kit"))
+        self.submit(manifest(incompatible_with={"Other.Kit": {"note": "Both patch vats", "below": "2.0.0"}}))
+        self.build()
+        pair = {"mods": {"Other.Kit": {"below": "2.0.0"}, "Owner.Repo": {}}, "note": "Both patch vats"}
+        self.assertEqual(self.read(mi.INCOMPATIBILITIES_FILE), [pair])
+        self.assertEqual(self.read("repository.json")["incompatible"], [pair])
+        self.assertIn("incompatible_with", self.read("manifests", "Owner", "Repo", "1.0.0.json"))
+
+        self.submit(manifest(version="1.1.0"))
+        rc, out = self.build()
+        self.assertEqual(rc, 0, out)
+        pair["mods"]["Owner.Repo"] = {"below": "1.1.0"}
+        self.assertEqual(self.read(mi.INCOMPATIBILITIES_FILE), [pair])
+        self.assertEqual(self.read("repository.json")["incompatible"], [pair])
+
+    def test_a_maintainers_list_needs_no_manifest(self):
+        self.place(manifest("Other.Kit"))
+        self.place(manifest())
+        mi._write_json(os.path.join(self.root, mi.INCOMPATIBILITIES_FILE),
+                       [{"mods": {"Owner.Repo": {}, "Other.Kit": {}}, "note": "Reported by players"}])
+        rc, out = self.build(ingest=False)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.read("repository.json")["incompatible"],
+                         [{"mods": {"Other.Kit": {}, "Owner.Repo": {}}, "note": "Reported by players"}])
+
+    def test_a_bad_list_blocks_the_build(self):
+        self.place(manifest())
+        mi._write_json(os.path.join(self.root, mi.WITHDRAWN_FILE), {"Owner.Repo": {"9.0.0": "x"}})
+        with self.assertRaises(mi.ValidationError) as cm:
+            self.build(ingest=False)
+        self.assertIn("no such version", str(cm.exception))
+
+    def test_withdrawn_versions_leave_the_pointers_and_listing(self):
+        for v in ("1.0.0", "1.1.0", "2.0.0"):
+            self.place(manifest(version=v, changelog=f"Release {v}"))
+        self.build(ingest=False)
+        base = ("manifests", "Owner", "Repo")
+        mi._write_json(os.path.join(self.root, mi.WITHDRAWN_FILE),
+                       {"Owner.Repo": {"2.0.0": "Corrupts saves", "1.1.0": "Crashes servers"}})
+        rc, out = self.build(ingest=False)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.read(*base, "latest.json")["version"], "1.0.0")
+        self.assertEqual(self.read(*base, "latest.1.json")["version"], "1.0.0")
+        self.assertFalse(os.path.exists(os.path.join(self.root, *base, "latest.2.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.root, *base, "2.0.0.json")))    # manifests stay
+        index = self.read("repository.json")
+        self.assertEqual(list(index["mods"]["Owner.Repo"]), ["1"])
+        self.assertEqual(index["mods"]["Owner.Repo"]["1"]["versions"], ["1.0.0"])
+        self.assertEqual(index["mods"]["Owner.Repo"]["1"]["changelog"], "Release 1.0.0")
+        self.assertEqual(index["withdrawn"], {"Owner.Repo": {"1.1.0": "Crashes servers", "2.0.0": "Corrupts saves"}})
+
+        mi._write_json(os.path.join(self.root, mi.WITHDRAWN_FILE),
+                       {"Owner.Repo": {v: "x" for v in ("1.0.0", "1.1.0", "2.0.0")}})
+        rc, out = self.build(ingest=False)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("Owner.Repo", self.read("repository.json")["mods"])
+        self.assertEqual([n for n in os.listdir(os.path.join(self.root, *base)) if n.startswith("latest")], [])
+        self.assertIn("every version is withdrawn", out)
+
+    def test_the_site_skips_withdrawn_versions(self):
+        for v in ("1.0.0", "1.1.0"):
+            self.place(manifest(version=v, changelog=f"Release {v}"))
+        mi._write_json(os.path.join(self.root, mi.WITHDRAWN_FILE), {"Owner.Repo": {"1.1.0": "x"}})
+        Site._write_page(os.path.join(self.root, "web", "dist", "index.html"))
+        rc, out = run_quiet(mi.cmd_site, repo=self.root, template=None, out=None, owner=None)
+        self.assertEqual(rc, 0, out)
+        rows = json.loads(Site._baked_rows(os.path.join(self.root, "site", "index.html")))
+        self.assertEqual([(r["latest"], r["changelog"]) for r in rows], [("1.0.0", "Release 1.0.0")])
 
 
 if __name__ == "__main__":
